@@ -1,2 +1,2 @@
 # rssparser
-python script to read Nist json file and rss xml feed
+python script to read Nist and Cert feeds (json and xml file ) 
