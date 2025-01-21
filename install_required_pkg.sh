@@ -6,14 +6,19 @@ list_required_apt_package="python3-lxml python3-validators python3-feedparser"
 
 SUDO=
 [ -x /usr/bin/sudo ] && SUDO=/usr/bin/sudo
-package_install_result=1
+package_install_result=0
 
 install_with_apt()
 {
     set +e
     ${SUDO} apt update
-    ${SUDO} apt install -y ${list_required_apt_package}
-    package_install_result=$?
+    for pack in ${list_required_apt_package}
+    do
+        apt list --installed | egrep "\b${pack}\b"
+        [ $? -eq 0  ]  && continue
+        ${SUDO} apt install -y ${pack}
+        package_install_result=$(expr $? + ${package_install_result} )
+    done    
     set -e
     
 }
