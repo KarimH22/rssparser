@@ -2,7 +2,6 @@
 # @author Karim HAROUAT
 # CVE parser
 from ast import Store
-from inspect import ArgSpec
 from os import link
 import string
 import feedparser
