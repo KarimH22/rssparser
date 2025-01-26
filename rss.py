@@ -164,13 +164,18 @@ def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showl
     NewsFeed_size=len(NewsFeed.entries)
     print ("There are " + str(NewsFeed_size) +" entries")
     print("******************************\n\n")
-    r=nb_entry
-    if nb_entry == 0:
-        r=NewsFeed_size
-    if (r >  NewsFeed_size):
+    start_range = NewsFeed_size
+    end_range = 0
+    if (start_range > 1):
+        start_range = start_range - 1
+    if (nb_entry >  NewsFeed_size):
         print("You want too much data more than real entries")
-        r = NewsFeed_size
-    for i in range(r):
+        end_range = 0
+    else:
+        end_range = NewsFeed_size-nb_entry
+        if(end_range > 1):
+            end_range = end_range - 1
+    for i in range(start_range,end_range,-1):
         try:
             entry = NewsFeed.entries[i]
             if keyword is not None:
