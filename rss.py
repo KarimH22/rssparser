@@ -1,7 +1,6 @@
 #!/bin/python3
 # @author Karim HAROUAT
 # CVE parser
-from ast import Store
 from os import link
 import string
 import feedparser
@@ -13,6 +12,7 @@ import json
 import requests
 import zipfile as ZF
 import tempfile as tmpfile
+from datetime import datetime
 
 
 def type_url(strurl):
@@ -28,28 +28,29 @@ def type_file(filename):
         raise argparse.ArgumentTypeError("Should be an existing file")
 
 class JsonContent:
-    def __init__(self, filesource):
+    def __init__(self, filesource,tag='CVE_Items'):
         self.json_content = None
+        self.main_tag=tag
         if os.path.isfile(filesource):
             content_file = open(filesource,'r')
             self.json_content = json.load(content_file)
             content_file.close()
         else:
             self.json_content = json.loads(filesource)
-    
+
     def content(self):
         return self.json_content
     def size(self):
-        return len(self.json_content['CVE_Items'])
+        return len(self.json_content[self.main_tag])
+
 
 def get_nist_json(date=None):
     cveperiod="recent"
     if date != None:
         year=str(date).split('-')[0]
         if year.isdigit() and int(year)>1000 :
-            cveperiod=year    
-    url="https://nvd.nist.gov/feeds/json/cve/1.1/nvdcve-1.1-"+cveperiod+".json.zip"
-    zfile_name="nvdcve-1.1-"+cveperiod+".json.zip"
+            cveperiod=year
+    url=nist_url+"/cve/1.1/nvdcve-1.1-"+cveperiod+".json.zip"
     try:
         response=requests.get(url)
         local=tmpfile.NamedTemporaryFile('wb')
@@ -63,24 +64,62 @@ def get_nist_json(date=None):
         print(f"try to get {url} but failed, error {str(e)}")
         exit(1)
 
+def get_cve_org_json(date=None):
+    cveperiod=None
+    current_date = datetime.datetime.today()
+    current_year = current_date.year
+    current_date_suffix = current_date.strftime("%Y_%m_%d_%H_%M_%S")
+    if date != None:
+        year=str(date).split('-')[0]
+        if year.isdigit() and int(year)>1000 :
+            cveperiod=year
+    else:
+        cveperiod = current_year
+
+    url="https://github.com/CVEProject/cvelistV5/archive/refs/heads/main.zip"
+    try:
+        response=requests.get(url)
+        local=tmpfile.NamedTemporaryFile('wb')
+        local.write(response.content)
+        data=ZF.ZipFile(str(local.name))
+        data_to_return={}
+        for name in data.namelist():
+            if (cveperiod != None and not name.find(cveperiod)) or not name.endswith(".json"):
+                continue
+            data_to_return |=data.read(name)
+        data.close()
+        local.close()
+        return data_to_return
+    except Exception as e:
+        print(f"try to get {url} but failed, error {str(e)}")
+        exit(1)
+
 
 def print_entry_keys(url):
     try:
-        if type(url)==str and ("cert" in url or "mitre" in url):
+        if type(url) != str:
+            print("Error not a string :"+url )
+            return
+        if url == cert_ssi_url:
             print("Reading cert xml file")
             NewsFeed = feedparser.parse(url)
             entry = NewsFeed.entries[0]
             print(entry)
-        else:            
+        if url == nist_url:
             print("Reading nist json file")
-            NewsFeed = JsonContent(url).content()
+            NewsFeed = JsonContent(get_nist_json()).content()
             first=NewsFeed['CVE_Items'][0]['cve']['CVE_data_meta']['ID']
+            print(first)
+        if (url == cve_org_url):
+            print("Reading org cve json file")
+            NewsFeed = JsonContent(get_cve_org_json("2025"),'containers').content()
+            first=NewsFeed["cveMetadata"][0]['cveId']
             print(first)
     except Exception as e:
         print(e)
         print("Link is bad or not rss feed so that no keys attribute ")
 
-def print_cert_details(entry,showlink=False,verbose=False):    
+def print_cert_details(entry,showlink=False,verbose=False):
     if verbose:
         try:
             text =  html.fromstring(entry.summary).text_content()
@@ -103,7 +142,7 @@ def print_cert_details(entry,showlink=False,verbose=False):
     if verbose or showlink:
         print("==============================")
 
-def print_nist_details(entry,showlink=False,verbose=False):    
+def print_nist_details(entry,showlink=False,verbose=False):
     if verbose:
         try:
             text =  entry['cve']['description']['description_data'][0]['value']
@@ -118,7 +157,7 @@ def print_nist_details(entry,showlink=False,verbose=False):
     if verbose or showlink:
         print(link)
     if verbose or showlink:
-        print("==============================")        
+        print("==============================")
 
 def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showlink=False,verbose=False,quiet_on_error=False):
     NewsFeed = feedparser.parse(url)
@@ -153,6 +192,8 @@ def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showl
 
 def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showlink=False,verbose=False,quiet_on_error=False):
     try:
+        if (not os.path.exists(url)):
+            url=get_nist_json(keydate)
         NewsFeed = JsonContent(url).content()
         NewsFeed_size = JsonContent(url).size()
     except AssertionError as error:
@@ -191,20 +232,40 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showl
                 print("No feed")
 
 
-def print_entry(url, nb_entry,keyword=None,keydate=None,showlink=False,severity=None,verbose=False,quiet_on_error=False):
-    if type(url)==str and ("cert" in url or "mitre" in url):
-        print_cert_entry(url,nb_entry,keyword,keydate,severity=severity,showlink=showlink,verbose=verbose,quiet_on_error=quiet_on_error)
-    else:
-        print_nist_entry(url,nb_entry,keyword,keydate,severity=severity,showlink=showlink,verbose=verbose,quiet_on_error=quiet_on_error)
+
+
+def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showlink=False,verbose=False,quiet_on_error=False):
+    if (not os.path.exists(url)):
+            url=get_cve_org_json(keydate)
+    print(url)
+    #['containers'][0]['cna']['x_legacyV4Record']['ID']
+
+
+cert_ssi_url="https://www.cert.ssi.gouv.fr/alerte/feed/"
+cve_org_url="https://www.cve.org"
+nist_url="https://nvd.nist.gov/feeds/json"
+cve_format_funs={
+    "cert_ssi":{
+        "url":cert_ssi_url,
+        "fun":print_cert_entry,
+    },
+    "nist":{
+        "url":nist_url,
+        "fun":print_nist_entry,
+    },
+    "cve_org":{
+        "url":cve_org_url,
+        "fun":print_cve_org_entry,
+    }
+}
 
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
-    default_url="https://www.cert.ssi.gouv.fr/alerte/feed/"
+
+    default_url=cert_ssi_url
     quiet=False
     parser = argparse.ArgumentParser()
     #parser.add_help("show entries from RSS feed link")
-    parser.add_argument('-u','--url',dest='url', help="the rss link , default is "+default_url,
-                    type=type_url, default=default_url )
     parser.add_argument('-f','--file',dest='file', help="a json/xml file to parse, (xml cert format; json nist format expected)  `",
                     type=str, default=None )
     parser.add_argument('-n',dest='entryval',default=0,help="entry number to show, 0 to see all ",
@@ -214,20 +275,26 @@ if __name__ == '__main__':
     parser.add_argument('-d','--debug',action='store_true', required=False,help="Show keys in the rss fields")
     parser.add_argument('-q','--quiet',action='store_true', required=False,help="Do not show empty feed")
     parser.add_argument('--nist',action='store_true', required=False,default=False,help="Get nist infos")
+    parser.add_argument('--cve-org',action='store_true', required=False,default=False,help="Get cve.org infos, took all source from git so low ")
     parser.add_argument('-v','--verbose',action='store_true', required=False,help="Display summary of elements")
     parser.add_argument('-l','--links',action='store_true', required=False,help="Display related link")
     parser.add_argument('-D','--date',dest='pubdate',help="date of info, for ssi gouv format is like 12 mars 2024, for nist yyyy-mm-dd ")
     parser.add_argument('-s','--severity',dest='severity', help="cve severity high/critical ",  type=str, default=None )
     args = parser.parse_args()
 
-    source_link=args.url
+    source="cert_ssi"
     if args.nist:
-        source_link=get_nist_json(date=args.pubdate)
+        source="nist"
+    if args.cve_org and not args.nist:
+        source="cve_org"
+    source_link=cve_format_funs[source]["url"]
+
     if args.file is not None:
         source_link=args.file
     if args.debug:
             print_entry_keys(source_link)
-    
-    print_entry(source_link,args.entryval,args.kw,args.pubdate,severity=args.severity,verbose=args.verbose,showlink=args.links,quiet_on_error=args.quiet)
+
+    cve_format_funs[source]['fun'](source_link,args.entryval,args.kw,args.pubdate,severity=args.severity,verbose=args.verbose,showlink=args.links,quiet_on_error=args.quiet)
+
 
 
