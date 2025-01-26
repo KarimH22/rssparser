@@ -172,7 +172,8 @@ def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showl
         print("You want too much data more than real entries")
         end_range = 0
     else:
-        end_range = NewsFeed_size-nb_entry
+        if (nb_entry != 0) : 
+            end_range =  NewsFeed_size - nb_entry
         if(end_range > 1):
             end_range = end_range - 1
     for i in range(start_range,end_range,-1):
