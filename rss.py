@@ -159,7 +159,7 @@ def print_nist_details(entry,showlink=False,verbose=False):
     if verbose or showlink:
         print("==============================")
 
-def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showlink=False,verbose=False,quiet_on_error=False):
+def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showlink=False,verbose=False,quiet_on_error=False,ignore_word=None):
     NewsFeed = feedparser.parse(url)
     NewsFeed_size=len(NewsFeed.entries)
     print ("There are " + str(NewsFeed_size) +" entries")
@@ -179,6 +179,9 @@ def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showl
     for i in range(start_range,end_range,-1):
         try:
             entry = NewsFeed.entries[i]
+            if ignore_word is not None:
+                if (entry.title.lower().find(ignore_word.lower()) != -1) or (entry.summary.lower().find(ignore_word.lower()) != -1):
+                    continue
             if keyword is not None:
                 if (entry.title.lower().find(keyword.lower()) == -1) and (entry.summary.lower().find(keyword.lower()) == -1):
                     continue
@@ -196,7 +199,7 @@ def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showl
 
 
 
-def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showlink=False,verbose=False,quiet_on_error=False):
+def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showlink=False,verbose=False,quiet_on_error=False,ignore_word=None):
     try:
         if (not os.path.exists(url)):
             url=get_nist_json(keydate)
@@ -223,6 +226,9 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showl
                 pass
             if severity is not None and sev.lower() != severity.lower():
                     continue
+            if ignore_word is not None:
+                if (entry['cve']['description']['description_data'][0]['value'].lower().find(ignore_word.lower()) != -1):
+                    continue
             if keyword is not None:
                 if (entry['cve']['description']['description_data'][0]['value'].lower().find(keyword.lower()) == -1) and (entry['cve']['references']['reference_data'][0]['tags'][0].lower().find(keyword.lower()) == -1):
                     continue
@@ -240,7 +246,7 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showl
 
 
 
-def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showlink=False,verbose=False,quiet_on_error=False):
+def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showlink=False,verbose=False,quiet_on_error=False,ignore_word=None):
     if (not os.path.exists(url)):
             url=get_cve_org_json(keydate)
     print(url)
@@ -286,6 +292,8 @@ if __name__ == '__main__':
     parser.add_argument('-l','--links',action='store_true', required=False,help="Display related link")
     parser.add_argument('-D','--date',dest='pubdate',help="date of info, for ssi gouv format is like 12 mars 2024, for nist yyyy-mm-dd ")
     parser.add_argument('-s','--severity',dest='severity', help="cve severity high/critical ",  type=str, default=None )
+    parser.add_argument('--ignore',dest='ignorew',help="cve to ignore with given word ",
+                    type=str)
     args = parser.parse_args()
 
     source="cert_ssi"
@@ -300,7 +308,7 @@ if __name__ == '__main__':
     if args.debug:
             print_entry_keys(source_link)
 
-    cve_format_funs[source]['fun'](source_link,args.entryval,args.kw,args.pubdate,severity=args.severity,verbose=args.verbose,showlink=args.links,quiet_on_error=args.quiet)
+    cve_format_funs[source]['fun'](source_link,args.entryval,args.kw,args.pubdate,severity=args.severity,verbose=args.verbose,showlink=args.links,quiet_on_error=args.quiet,ignore_word=args.ignorew)
 
 
 
