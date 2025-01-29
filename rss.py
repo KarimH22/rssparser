@@ -70,7 +70,7 @@ def get_nist_json(date=None):
         local.close()
         return data_to_return
     except Exception as e:
-        print(f"try to get {url} but failed, error {str(e)}")
+        print(f"Try to get {url} but failed, error {str(e)}")
         exit(1)
 
 def get_cve_org_json(date=None, inputfile=None):
@@ -86,33 +86,33 @@ def get_cve_org_json(date=None, inputfile=None):
     url="https://github.com/CVEProject/cvelistV5/archive/refs/heads/main.zip"
     try:
         filename=""
-        if (inputfile is None):
+        if (not os.path.isfile(inputfile)):
             response=requests.get(url)
             local=tmpfile.NamedTemporaryFile('wb')    
             local.write(response.content)
             filename=str(local.name)
         else:
+            if(inputfile.endswith("json")):
+                f=open(inputfile,'r')
+                data_to_return=f.read()
+                f.close()
+                return data_to_return
             filename=os.path.abspath(inputfile)
         data=zipfile.ZipFile(filename)
     except Exception as e:
-        print(f"try to get {filename} but failed, error {str(e)}")
+        print(f"Try to get {filename} but failed, error {str(e)}")
         exit(1)
     try:
-        data_to_return=b''
-        loop=0
+        data_to_return=[]
         for name in data.namelist():
             if (  name.find(str(cveperiod)) == -1 ) or not name.endswith(".json"):
                 continue
-            #data_to_return +=data.read(name) + b','
-            data_to_return +=data.read(name) + b','
-            loop +=1
-            if loop==2:
-                break # TO REMOVE
+            data_to_return.append(data.read(name))
         data.close()
         if (inputfile is None):
             local.close()
     except Exception as e:
-        print(f"try to fill  data_to_return but failed at {name}, error {str(e)}")
+        print(f"Try to fill  data_to_return but failed at {name}, error {str(e)}")
         exit(1)
     return data_to_return
 
@@ -138,8 +138,7 @@ def print_entry_keys(url):
             first=NewsFeed["cveMetadata"][0]['cveId']
             print(first)
     except Exception as e:
-        print(e)
-        print("Link is bad or not rss feed so that no keys attribute ")
+        print(f"Link is bad or not rss feed so that no keys attribute : {e}")
 
 def print_cert_details(entry,showlink=False,verbose=False):
     if verbose:
@@ -152,7 +151,7 @@ def print_cert_details(entry,showlink=False,verbose=False):
         link = entry.links
     except:
         link = "Entry has no links attribute"
-        print("link error")
+        print("Link error")
     try:
         mystring=str(entry.links[0]).replace('\'','"')
         data = json.loads(mystring)
@@ -175,9 +174,33 @@ def print_nist_details(entry,showlink=False,verbose=False):
         link = entry['cve']['references']['reference_data'][0]['url']
     except:
         link = "Entry has no links attribute"
-        print("link error")
+        print("Link error")
     if verbose or showlink:
         print(link)
+    if verbose or showlink:
+        print("==============================")
+
+def print_cve_org_details(entry,showlink=False,verbose=False):
+    if verbose:
+        try:
+            text =  entry['cna']['descriptions'][0]['value']
+        except:
+            text = "Nothing found"
+        print(text)
+
+    nb_link=len(entry['cna']['references'])
+    try:
+        link = entry['cna']['references'][0]['url']
+    except:
+        link = "Entry has no links attribute"
+    try:
+        for link_idx in range(1,nb_link):
+            link += "\n" + entry['cna']['references'][link_idx]['url']
+    except:
+        print("Loop link failed")
+        pass
+    if verbose or showlink:
+        print(f"{nb_link} links: \n{link}")
     if verbose or showlink:
         print("==============================")
 
@@ -191,7 +214,7 @@ def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showl
     if (start_range > 1):
         start_range = start_range - 1
     if (nb_entry >  NewsFeed_size):
-        print("You want too much data more than real entries")
+        print("You ask for number of entries more than current one")
         end_range = 0
     else:
         if (nb_entry != 0) : 
@@ -230,14 +253,14 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showl
         NewsFeed_size = NewsFeedObj.size()
     except AssertionError as error:
         print(error)
-        print(url + " seems bad" )
-    print ("There are " + str(NewsFeed_size) +" entries")
+        print(f"{url} : seems bad" )
+    print (f"There are {NewsFeed_size} entries")
     print("******************************\n\n")
     r=nb_entry
     if nb_entry == 0:
         r = NewsFeed_size
     if (r >  NewsFeed_size):
-        print("You want too much data more than real entries")
+        print("You ask for number of entries more than current available")
         r = NewsFeed_size
     for i in range(r):
         try:
@@ -272,45 +295,48 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showl
 def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showlink=False,verbose=False,quiet_on_error=False,ignore_word=None):
     try:
         data_content=get_cve_org_json(keydate,url)
-        NewsFeedObj = JsonContent(filesource=data_content,tag='cveMetadata')
-        NewsFeed = NewsFeedObj.content()
-        NewsFeed_size = NewsFeedObj.size()
+        data_size=len(data_content)
     except AssertionError as error:
         print(error)
-        print(url + " seems bad" )
-    print ("There are " + str(NewsFeed_size) +" entries")
+        print(f"{url} : seems bad" )
+    print (f"There are {data_size} entries")
     print("******************************\n\n")
     r=nb_entry
     if nb_entry == 0:
-        r = NewsFeed_size
-    if (r >  NewsFeed_size):
+        r = data_size
+    if (r >  data_size):
         print("You want too much data more than real entries")
-        r = NewsFeed_size
-    print(f"NewsFeed is {NewsFeed}")
+        r = data_size
     for i in range(r):
         try:
-            entry = NewsFeed['containers'][i]
-            print(f"entry is {entry}")
+            NewsFeedObj = JsonContent(filesource=data_content[i],tag='containers')
+            NewsFeed = NewsFeedObj.content()
+            NewsFeed_size = NewsFeedObj.size()
+            entry = NewsFeed['containers']
             sev="unknown"
             try:
-                sev=entry['impact']['baseMetricV3']['cvssV3']['baseSeverity']
+                sev=entry['cna']['metrics'][0]['cvssV3_1']['baseSeverity']
             except:
                 pass
+            try:
+                description=entry['cna']['descriptions'][0]['value']
+            except:
+                description=""
             if severity is not None and sev.lower() != severity.lower():
                     continue
             if ignore_word is not None:
-                if (entry['cve']['description']['description_data'][0]['value'].lower().find(ignore_word.lower()) != -1):
+                if (description.lower().find(ignore_word.lower()) != -1):
                     continue
             if keyword is not None:
-                if (entry['containers']['cna']['descriptions'][0]['value'].lower().find(keyword.lower()) == -1) and (entry['cve']['references']['reference_data'][0]['tags'][0].lower().find(keyword.lower()) == -1):
+                if (description.lower().find(keyword.lower()) == -1) and (entry['cve']['references']['reference_data'][0]['tags'][0].lower().find(keyword.lower()) == -1):
                     continue
             if keydate is not None:
-                if (entry['datePublished'].lower().find(keydate.lower()) == -1) :
+                if (NewsFeed['cveMetadata']['datePublished'].lower().find(keydate.lower()) == -1) :
                     continue
-            print(entry['cveId'])
-            print(entry['datePublished'])
+            print(NewsFeed['cveMetadata']['cveId'])
+            print(NewsFeed['cveMetadata']['datePublished'])
             print("Severity: "+sev)
-            #print_nist_details(entry,verbose=verbose,showlink=showlink)
+            print_cve_org_details(entry,verbose=verbose,showlink=showlink)
         except:
             if not quiet_on_error:
                 print("No feed")
@@ -351,11 +377,13 @@ if __name__ == '__main__':
     parser.add_argument('-d','--debug',action='store_true', required=False,help="Show keys in the rss fields")
     parser.add_argument('-q','--quiet',action='store_true', required=False,help="Do not show empty feed")
     parser.add_argument('--nist',action='store_true', required=False,default=False,help="Get nist infos")
-    parser.add_argument('--cve-org',action='store_true', required=False,default=False,help="Get cve.org infos. Does not work yet")
+    parser.add_argument('--cve-org',action='store_true', required=False,default=False,help="Get cve.org infos took a large zip file take time")
     parser.add_argument('-v','--verbose',action='store_true', required=False,help="Display summary of elements")
     parser.add_argument('-l','--links',action='store_true', required=False,help="Display related link")
     parser.add_argument('-D','--date',dest='pubdate',help="date of info, for ssi gouv format is like 12 mars 2024, for nist yyyy-mm-dd ")
-    parser.add_argument('-s','--severity',dest='severity', help="cve severity high/critical ",  type=str, default=None )
+    parser.add_argument('-s','--severity',dest='severity', help="cve severity \n for cert ssi : critique|haute|medium\
+                        \n for nist : high|critical \
+                        \n for cve.org : low|medium|high|critical ",  type=str, default=None )
     parser.add_argument('--ignore',dest='ignorew',help="cve to ignore with given word ",
                     type=str)
     args = parser.parse_args()
@@ -373,6 +401,3 @@ if __name__ == '__main__':
             print_entry_keys(source_link)
 
     cve_format_funs[source]['fun'](source_link,args.entryval,args.kw,args.pubdate,severity=args.severity,verbose=args.verbose,showlink=args.links,quiet_on_error=args.quiet,ignore_word=args.ignorew)
-
-
-
