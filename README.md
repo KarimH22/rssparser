@@ -19,7 +19,7 @@ To install it copy rss.py into `/usr/bin` or `/usr/local/bin` , be sure to have 
 For cve.org, tips:
  - get locally the last main.zip 
     ```bash
-    rss.py --get-cve-org
+    rss.py --get-cve-org-data
     ```
  - parse the zip file 
     ```bash

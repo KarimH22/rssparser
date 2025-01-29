@@ -5,6 +5,7 @@ from os import link
 import string
 import feedparser
 import argparse
+from argparse import RawTextHelpFormatter
 import validators
 import os
 from lxml import etree, html
@@ -375,30 +376,39 @@ if __name__ == '__main__':
 
     default_url=cert_ssi_url
     quiet=False
-    parser = argparse.ArgumentParser()
-    #parser.add_help("show entries from RSS feed link")
-    parser.add_argument('-f','--file',dest='file', help="a json/xml file to parse, (xml cert format; if  nist json add option --nist)  `",
+
+    prog_description="Parse CVE from ssi.gouv.fr or nist site or cve.org\n\
+        default is ssi.gouv.fr\n\
+        to parse nist or cve.org data base see below"
+    parser = argparse.ArgumentParser(description=prog_description,formatter_class=RawTextHelpFormatter)
+    parser.add_argument('--nist',action='store_true', required=False,default=False,help="Get nist infos")
+    parser.add_argument('--cve-org',action='store_true', required=False,default=False,help="Get cve.org infos took a large zip file take time")
+    parser.add_argument('-f','--file',dest='file', help="a json/xml file to parse\n\
+        cert.ssi.gouv.fr : xml format\n\
+        if  nist json add option --nist\n\
+        if cve.org zip file containing jsons, add --cve-org  ",
                     type=str, default=None )
     parser.add_argument('-n',dest='entryval',default=0,help="entry number to show, 0 to see all ",
                     type=int)
-    parser.add_argument('-k','--key',dest='kw',help="key word to look inside title of the feed ",
-                    type=str)
-    parser.add_argument('-d','--debug',action='store_true', required=False,help="Show keys in the rss fields")
-    parser.add_argument('-q','--quiet',action='store_true', required=False,help="Do not show empty feed")
-    parser.add_argument('--nist',action='store_true', required=False,default=False,help="Get nist infos")
-    parser.add_argument('--cve-org',action='store_true', required=False,default=False,help="Get cve.org infos took a large zip file take time")
-    parser.add_argument('-v','--verbose',action='store_true', required=False,help="Display summary of elements")
-    parser.add_argument('-l','--links',action='store_true', required=False,help="Display related link")
-    parser.add_argument('-D','--date',dest='pubdate',help="date of info, for ssi gouv format is like 12 mars 2024, for nist yyyy-mm-dd ")
-    parser.add_argument('-s','--severity',dest='severity', help="cve severity \n for cert ssi : critique|haute|medium\
+    parser.add_argument('-D','--date',dest='pubdate',help="to look for CVE on published date\n\
+        date format for ssi.gouv.fr : 12 mars 2024\n\
+        for nist,cve.org :  yyyy-mm-dd ")
+    parser.add_argument('-s','--severity',dest='severity', help=" for cert ssi : critique|haute|medium\
                         \n for nist : high|critical \
                         \n for cve.org : low|medium|high|critical ",  type=str, default=None )
-    parser.add_argument('--ignore',dest='ignorew',help="cve to ignore with given word ",
+    parser.add_argument('-k','--key',dest='kw',help="key word to look inside title of the feed ",
                     type=str)
-    parser.add_argument('--get-cve-data',action='store_true', required=False,default=False,help="Get cve zip source localy to launch after with option -f")
+    parser.add_argument('-v','--verbose',action='store_true', required=False,help="Display summary of elements")
+    parser.add_argument('-l','--links',action='store_true', required=False,help="Display related link")
+
+    parser.add_argument('--ignore',dest='ignorew',help="cve to ignore with given key word",
+                    type=str)
+    parser.add_argument('--get-cve-org-data',action='store_true', required=False,default=False,help="Get cve zip source localy and exit")
+    parser.add_argument('-q','--quiet',action='store_true', required=False,help="Do not show empty feed")
+    parser.add_argument('-d','--debug',action='store_true', required=False,help="Show keys in the rss fields")
     args = parser.parse_args()
 
-    if args.get_cve_data:
+    if args.get_cve_org_data:
         get_main_zip_cve_org()
         exit(0)
     source="cert_ssi"
