@@ -103,7 +103,6 @@ def get_cve_org_json(date=None, inputfile=None):
         exit(1)
     try:
         data_to_return=[]
-        print(cveperiod)
         for name in data.namelist():
             if (  name.find("CVE-"+str(cveperiod)) == -1 ) or not name.endswith(".json"):
                 continue
@@ -392,12 +391,13 @@ if __name__ == '__main__':
                     type=int)
     parser.add_argument('-D','--date',dest='pubdate',help="to look for CVE on published date\n\
         date format for ssi.gouv.fr : 12 mars 2024\n\
-        for nist,cve.org :  yyyy-mm-dd ")
+        for nist,cve.org :  yyyy-mm-dd\n\
+        for all you can set only the year: yyyy ")
     parser.add_argument('-s','--severity',dest='severity', help=" for cert ssi : critique|haute|medium\
-                        \n for nist : high|critical \
-                        \n for cve.org : low|medium|high|critical ",  type=str, default=None )
-    parser.add_argument('-k','--key',dest='kw',help="key word to look inside title of the feed ",
-                    type=str)
+        \n for nist : high|critical \
+        \n for cve.org : low|medium|high|critical ",  type=str, default=None )
+    parser.add_argument('-k','--key',dest='kw',help="key word to look inside title of the feed,\n\
+        for many words use quotes, e.g -k \"sql injection\" ", type=str)
     parser.add_argument('-v','--verbose',action='store_true', required=False,help="Display summary of elements")
     parser.add_argument('-l','--links',action='store_true', required=False,help="Display related link")
 
