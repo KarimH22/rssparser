@@ -82,12 +82,10 @@ def get_cve_org_json(date=None, inputfile=None):
         year=str(date).split('-')[0]
         if year.isdigit() and int(year)>1000 :
             cveperiod=year
-
-    url="https://github.com/CVEProject/cvelistV5/archive/refs/heads/main.zip"
     try:
         filename=""
         if (not os.path.isfile(inputfile)):
-            response=requests.get(url)
+            response=requests.get(cve_org_zip_url)
             local=tmpfile.NamedTemporaryFile('wb')    
             local.write(response.content)
             filename=str(local.name)
@@ -104,8 +102,9 @@ def get_cve_org_json(date=None, inputfile=None):
         exit(1)
     try:
         data_to_return=[]
+        print(cveperiod)
         for name in data.namelist():
-            if (  name.find(str(cveperiod)) == -1 ) or not name.endswith(".json"):
+            if (  name.find("CVE-"+str(cveperiod)) == -1 ) or not name.endswith(".json"):
                 continue
             data_to_return.append(data.read(name))
         data.close()
@@ -341,10 +340,20 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,sh
             if not quiet_on_error:
                 print("No feed")
 
+def get_main_zip_cve_org():
+    response=requests.get(cve_org_zip_url)
+    file_name="cvelistV5-main.zip"
+    local_file=open(file_name,'wb')
+    if local_file:
+        local_file.write(response.content)
+        print(f"Get last main cve org in {file_name}")
+        print(f"You can  call now : rss.py --cve-org -f {file_name} [options]")
+
 #########################################################################
 #################### MAIN
 cert_ssi_url="https://www.cert.ssi.gouv.fr/alerte/feed/"
 cve_org_url="https://www.cve.org"
+cve_org_zip_url="https://github.com/CVEProject/cvelistV5/archive/refs/heads/main.zip"
 nist_url="https://nvd.nist.gov/feeds/json"
 cve_format_funs={
     "cert_ssi":{
@@ -386,8 +395,12 @@ if __name__ == '__main__':
                         \n for cve.org : low|medium|high|critical ",  type=str, default=None )
     parser.add_argument('--ignore',dest='ignorew',help="cve to ignore with given word ",
                     type=str)
+    parser.add_argument('--get-cve-data',action='store_true', required=False,default=False,help="Get cve zip source localy to launch after with option -f")
     args = parser.parse_args()
 
+    if args.get_cve_data:
+        get_main_zip_cve_org()
+        exit(0)
     source="cert_ssi"
     if args.nist:
         source="nist"
