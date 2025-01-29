@@ -200,7 +200,7 @@ def print_cve_org_details(entry,showlink=False,verbose=False):
         print("Loop link failed")
         pass
     if verbose or showlink:
-        print(f"{nb_link} links: \n{link}")
+        print(f"{nb_link} link(s): \n{link}")
     if verbose or showlink:
         print("==============================")
 
