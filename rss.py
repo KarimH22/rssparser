@@ -186,6 +186,11 @@ def print_cve_org_details(entry,showlink=False,verbose=False):
         except:
             text = "Nothing found"
         print(text)
+        try:
+            text =  entry['cna']['affected'][0]['product']
+        except:
+            text = "no related product found"
+        print(f"Product: {text}")
 
     nb_link=len(entry['cna']['references'])
     try:
@@ -324,7 +329,7 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,sh
             if severity is not None and sev.lower() != severity.lower():
                     continue
             if ignore_word is not None:
-                if (description.lower().find(ignore_word.lower()) != -1):
+                if (description.lower().find(ignore_word.lower()) != -1) or ( entry['cna']['references'][0]['url'].lower().find(ignore_word.lower()) != -1 ):
                     continue
             if keyword is not None:
                 if (description.lower().find(keyword.lower()) == -1) and (entry['cve']['references']['reference_data'][0]['tags'][0].lower().find(keyword.lower()) == -1):
