@@ -15,7 +15,7 @@ import zipfile
 import re
 import tempfile as tmpfile
 from datetime import datetime
-
+import colorama as color
 
 def type_url(strurl):
     if validators.url(strurl):
@@ -149,10 +149,12 @@ def print_entry_keys(url):
     except Exception as e:
         print(f"Link is bad or not rss feed so that no keys attribute : {e}")
 
-def print_cert_details(entry):
+def print_cert_details(entry,keyword=None):
     if verbose:
         try:
             text =  html.fromstring(entry.summary).text_content()
+            if keyword is not None:
+                text=text.replace(keyword,f"{color.Fore.RED}{keyword}{color.Style.RESET_ALL}")
         except:
             text = "Nothing found"
         print(text)
@@ -170,10 +172,12 @@ def print_cert_details(entry):
     print_link(link)
 
 
-def print_nist_details(entry):
+def print_nist_details(entry,keyword=None):
     if verbose:
         try:
             text =  entry['cve']['description']['description_data'][0]['value']
+            if keyword is not None:
+                text=text.replace(keyword,f"{color.Fore.RED}{keyword}{color.Style.RESET_ALL}")
         except:
             text = "Nothing found"
         print(text)
@@ -184,10 +188,12 @@ def print_nist_details(entry):
         print("Link error")
     print_link(link)
 
-def print_cve_org_details(entry):
+def print_cve_org_details(entry,keyword=None,exact_word=False):
     if verbose:
         try:
             text =  entry['cna']['descriptions'][0]['value']
+            if keyword is not None:
+                text=text.replace(keyword,f"{color.Fore.RED}{keyword}{color.Style.RESET_ALL}")
         except:
             text = "Nothing found"
         print(text)
@@ -213,8 +219,6 @@ def print_cve_org_details(entry):
 def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False):
     NewsFeed = feedparser.parse(url)
     NewsFeed_size=len(NewsFeed.entries)
-    if not exact_word and keyword is not None:
-        keyword=keyword.lower()
     print ("There are " + str(NewsFeed_size) +" entries")
     print("******************************\n\n")
     start_range = NewsFeed_size
@@ -236,7 +240,7 @@ def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
                 if (entry.title.lower().find(ignore_word.lower()) != -1) or (entry.summary.lower().find(ignore_word.lower()) != -1):
                     continue
             if keyword is not None:
-                if (entry.title.lower().find(keyword) == -1) and (entry.summary.lower().find(keyword) == -1):
+                if (entry.title.lower().find(keyword.lower()) == -1) and (entry.summary.lower().find(keyword.lower()) == -1):
                     continue
                 if exact_word and (not re.search(r'\b'+keyword+r'\b',entry.title)) and (not re.search(r'\b'+keyword+r'\b',entry.summary)) :
                     print(f"Look for {keyword} : failed")
@@ -248,7 +252,7 @@ def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
                 if (entry.title.lower().find(keydate.lower()) == -1) :
                     continue
             print(entry.title)
-            print_cert_details(entry)
+            print_cert_details(entry,keyword)
         except:
             if not quiet_on_error:
                 print("No feed")
@@ -267,8 +271,6 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
         print(f"{url} : seems bad" )
     print (f"There are {NewsFeed_size} entries")
     print("******************************\n\n")
-    if (not exact_word) and (keyword is not None):
-        keyword=keyword.lower()
     r=nb_entry
     if nb_entry == 0:
         r = NewsFeed_size
@@ -295,7 +297,7 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
                 if (description.lower().find(ignore_word.lower()) != -1):
                     continue
             if keyword is not None:
-                if (description.lower().find(keyword) == -1) and (tags.lower().find(keyword) == -1):
+                if (description.lower().find(keyword.lower()) == -1) and (tags.lower().find(keyword.lower()) == -1):
                     continue
                 if exact_word and (not re.search(r'\b'+keyword+r'\b',description) ) and (not re.search(r'\b'+keyword+r'\b',tags) ):
                     continue
@@ -305,7 +307,7 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
             print(entry['cve']['CVE_data_meta']['ID'])
             print(entry['publishedDate'])
             print("Severity: "+sev)
-            print_nist_details(entry)
+            print_nist_details(entry,keyword)
         except:
             if not quiet_on_error:
                 print("No feed")
@@ -314,8 +316,6 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
 
 
 def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False):
-    if not exact_word and keyword is not None:
-        keyword=keyword.lower()
     try:
         data_content=get_cve_org_json(keydate,url)
         data_size=len(data_content)
@@ -367,7 +367,7 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,qu
             print(NewsFeed['cveMetadata']['cveId'])
             print(NewsFeed['cveMetadata']['datePublished'])
             print("Severity: "+sev)
-            print_cve_org_details(entry)
+            print_cve_org_details(entry,keyword,exact_word)
         except:
             if not quiet_on_error:
                 print("No feed")

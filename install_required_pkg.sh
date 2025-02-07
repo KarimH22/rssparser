@@ -1,8 +1,8 @@
 #!/bin/bash
 
-list_required_pip_package="feedparser validators lxml"
+list_required_pip_package="feedparser validators lxml colorama"
 
-list_required_apt_package="python3-lxml python3-validators python3-feedparser"
+list_required_apt_package="python3-lxml python3-validators python3-feedparser python3-colorama"
 
 SUDO=
 [ -x /usr/bin/sudo ] && SUDO=/usr/bin/sudo
