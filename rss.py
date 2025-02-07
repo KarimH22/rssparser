@@ -12,6 +12,7 @@ from lxml import etree, html
 import json
 import requests
 import zipfile
+import re
 import tempfile as tmpfile
 from datetime import datetime
 
@@ -52,7 +53,16 @@ class JsonContent:
         if self.json_content == "" or self.json_content == {}:
             return 0
         return len(self.json_content[self.main_tag])
+# End class
 
+def print_debug(message):
+    if (debug_mode):
+        print(message)
+
+def print_link(message):
+    if showlink:
+        print(message)
+        print("==============================")
 
 def get_nist_json(date=None):
     cveperiod="recent"
@@ -139,7 +149,7 @@ def print_entry_keys(url):
     except Exception as e:
         print(f"Link is bad or not rss feed so that no keys attribute : {e}")
 
-def print_cert_details(entry,showlink=False,verbose=False):
+def print_cert_details(entry):
     if verbose:
         try:
             text =  html.fromstring(entry.summary).text_content()
@@ -157,12 +167,10 @@ def print_cert_details(entry,showlink=False,verbose=False):
         link = data['href']
     except:
          print("Href was not found")
-    if verbose or showlink:
-        print(link)
-    if verbose or showlink:
-        print("==============================")
+    print_link(link)
 
-def print_nist_details(entry,showlink=False,verbose=False):
+
+def print_nist_details(entry):
     if verbose:
         try:
             text =  entry['cve']['description']['description_data'][0]['value']
@@ -174,12 +182,9 @@ def print_nist_details(entry,showlink=False,verbose=False):
     except:
         link = "Entry has no links attribute"
         print("Link error")
-    if verbose or showlink:
-        print(link)
-    if verbose or showlink:
-        print("==============================")
+    print_link(link)
 
-def print_cve_org_details(entry,showlink=False,verbose=False):
+def print_cve_org_details(entry):
     if verbose:
         try:
             text =  entry['cna']['descriptions'][0]['value']
@@ -203,14 +208,13 @@ def print_cve_org_details(entry,showlink=False,verbose=False):
     except:
         print("Loop link failed")
         pass
-    if verbose or showlink:
-        print(f"{nb_link} link(s): \n{link}")
-    if verbose or showlink:
-        print("==============================")
+    print_link(f"{nb_link} link(s): \n{link}")
 
-def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showlink=False,verbose=False,quiet_on_error=False,ignore_word=None):
+def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False):
     NewsFeed = feedparser.parse(url)
     NewsFeed_size=len(NewsFeed.entries)
+    if not exact_word and keyword is not None:
+        keyword=keyword.lower()
     print ("There are " + str(NewsFeed_size) +" entries")
     print("******************************\n\n")
     start_range = NewsFeed_size
@@ -232,7 +236,10 @@ def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showl
                 if (entry.title.lower().find(ignore_word.lower()) != -1) or (entry.summary.lower().find(ignore_word.lower()) != -1):
                     continue
             if keyword is not None:
-                if (entry.title.lower().find(keyword.lower()) == -1) and (entry.summary.lower().find(keyword.lower()) == -1):
+                if (entry.title.lower().find(keyword) == -1) and (entry.summary.lower().find(keyword) == -1):
+                    continue
+                if exact_word and (not re.search(r'\b'+keyword+r'\b',entry.title)) and (not re.search(r'\b'+keyword+r'\b',entry.summary)) :
+                    print(f"Look for {keyword} : failed")
                     continue
             if severity is not None:
                 if (entry.title.lower().find(severity.lower()) == -1) and (entry.summary.lower().find(severity.lower()) == -1):
@@ -241,14 +248,14 @@ def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showl
                 if (entry.title.lower().find(keydate.lower()) == -1) :
                     continue
             print(entry.title)
-            print_cert_details(entry,verbose=verbose,showlink=showlink)
+            print_cert_details(entry)
         except:
             if not quiet_on_error:
                 print("No feed")
 
 
 
-def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showlink=False,verbose=False,quiet_on_error=False,ignore_word=None):
+def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False):
     try:
         if (not os.path.exists(url)):
             url=get_nist_json(keydate)
@@ -260,6 +267,8 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showl
         print(f"{url} : seems bad" )
     print (f"There are {NewsFeed_size} entries")
     print("******************************\n\n")
+    if (not exact_word) and (keyword is not None):
+        keyword=keyword.lower()
     r=nb_entry
     if nb_entry == 0:
         r = NewsFeed_size
@@ -274,13 +283,21 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showl
                 sev=entry['impact']['baseMetricV3']['cvssV3']['baseSeverity']
             except:
                 pass
+            description=entry['cve']['description']['description_data'][0]['value']
+            tags=""
+            try:
+                tags=entry['cve']['references']['reference_data'][0]['tags'][0]
+            except:
+                pass
             if severity is not None and sev.lower() != severity.lower():
                     continue
             if ignore_word is not None:
-                if (entry['cve']['description']['description_data'][0]['value'].lower().find(ignore_word.lower()) != -1):
+                if (description.lower().find(ignore_word.lower()) != -1):
                     continue
             if keyword is not None:
-                if (entry['cve']['description']['description_data'][0]['value'].lower().find(keyword.lower()) == -1) and (entry['cve']['references']['reference_data'][0]['tags'][0].lower().find(keyword.lower()) == -1):
+                if (description.lower().find(keyword) == -1) and (tags.lower().find(keyword) == -1):
+                    continue
+                if exact_word and (not re.search(r'\b'+keyword+r'\b',description) ) and (not re.search(r'\b'+keyword+r'\b',tags) ):
                     continue
             if keydate is not None:
                 if (entry['publishedDate'].lower().find(keydate.lower()) == -1) :
@@ -288,7 +305,7 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showl
             print(entry['cve']['CVE_data_meta']['ID'])
             print(entry['publishedDate'])
             print("Severity: "+sev)
-            print_nist_details(entry,verbose=verbose,showlink=showlink)
+            print_nist_details(entry)
         except:
             if not quiet_on_error:
                 print("No feed")
@@ -296,7 +313,9 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showl
 
 
 
-def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,showlink=False,verbose=False,quiet_on_error=False,ignore_word=None):
+def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False):
+    if not exact_word and keyword is not None:
+        keyword=keyword.lower()
     try:
         data_content=get_cve_org_json(keydate,url)
         data_size=len(data_content)
@@ -322,17 +341,25 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,sh
                 sev=entry['cna']['metrics'][0]['cvssV3_1']['baseSeverity']
             except:
                 pass
+            description=""
             try:
                 description=entry['cna']['descriptions'][0]['value']
             except:
-                description=""
+                pass
+            tags=""
+            try:
+                tags=entry['cve']['references']['reference_data'][0]['tags'][0]
+            except:
+                pass
             if severity is not None and sev.lower() != severity.lower():
                     continue
             if ignore_word is not None:
                 if (description.lower().find(ignore_word.lower()) != -1) or ( entry['cna']['references'][0]['url'].lower().find(ignore_word.lower()) != -1 ):
                     continue
             if keyword is not None:
-                if (description.lower().find(keyword.lower()) == -1) and (entry['cve']['references']['reference_data'][0]['tags'][0].lower().find(keyword.lower()) == -1):
+                if (description.lower().find(keyword.lower()) == -1) and (tags.lower().find(keyword.lower()) == -1):
+                    continue
+                if exact_word and (not re.search(r'\b'+keyword+r'\b',description) ) and (not re.search(r'\b'+keyword+r'\b',tags) ):
                     continue
             if keydate is not None:
                 if (NewsFeed['cveMetadata']['datePublished'].lower().find(keydate.lower()) == -1) :
@@ -340,7 +367,7 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,sh
             print(NewsFeed['cveMetadata']['cveId'])
             print(NewsFeed['cveMetadata']['datePublished'])
             print("Severity: "+sev)
-            print_cve_org_details(entry,verbose=verbose,showlink=showlink)
+            print_cve_org_details(entry)
         except:
             if not quiet_on_error:
                 print("No feed")
@@ -374,7 +401,9 @@ cve_format_funs={
         "fun":print_cve_org_entry,
     }
 }
-
+showlink=False
+verbose=False
+debug_mode=False
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
 
@@ -411,6 +440,7 @@ if __name__ == '__main__':
     parser.add_argument('--get-cve-org-data',action='store_true', required=False,default=False,help="Get cve zip source localy and exit")
     parser.add_argument('-q','--quiet',action='store_true', required=False,help="Do not show empty feed")
     parser.add_argument('-d','--debug',action='store_true', required=False,help="Show keys in the rss fields")
+    parser.add_argument('--exact-key',action='store_true', required=False,help="exact key")
     args = parser.parse_args()
 
     if args.get_cve_org_data:
@@ -427,5 +457,9 @@ if __name__ == '__main__':
         source_link=args.file
     if args.debug:
             print_entry_keys(source_link)
-
-    cve_format_funs[source]['fun'](source_link,args.entryval,args.kw,args.pubdate,severity=args.severity,verbose=args.verbose,showlink=args.links,quiet_on_error=args.quiet,ignore_word=args.ignorew)
+    if args.verbose:
+        verbose=True
+        showlink=True
+    if args.links:
+        showlink=True
+    cve_format_funs[source]['fun'](source_link,args.entryval,args.kw,args.pubdate,severity=args.severity,quiet_on_error=args.quiet,ignore_word=args.ignorew,exact_word=args.exact_key)
