@@ -228,10 +228,11 @@ def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
     if (nb_entry >  NewsFeed_size):
         print("You ask for number of entries more than current one")
         end_range = 0
-    if (nb_entry != 0) : 
-        end_range =  NewsFeed_size - nb_entry
-    if(end_range > 1):
-        end_range = end_range - 1
+    else:
+        if (nb_entry != 0) : 
+            end_range =  NewsFeed_size - nb_entry
+        if(end_range > 1):
+            end_range = end_range - 1
     for i in range(start_range,end_range,-1):
         try:
             entry = NewsFeed.entries[i]
@@ -323,17 +324,13 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,qu
         print(f"{url} : seems bad" )
     print (f"There are {data_size} entries")
     print("******************************\n\n")
-    start_range = data_size
-    end_range = 0
-    if (nb_entry >  data_size):
+    r=nb_entry
+    if nb_entry == 0:
+        r = data_size
+    if (r >  data_size):
         print("You want too much data more than real entries")
-        nb_entry = data_size
-        end_range=0
-    if (nb_entry != 0) : 
-        end_range =  data_size - nb_entry
-    if(end_range > 1):
-        end_range = end_range - 1
-    for i in range(start_range,end_range,-1):
+        r = data_size
+    for i in range(r):
         try:
             NewsFeedObj = JsonContent(filesource=data_content[i],tag='containers')
             NewsFeed = NewsFeedObj.content()
