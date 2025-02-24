@@ -116,7 +116,7 @@ def get_cve_org_json(date=None, inputfile=None):
         for name in data.namelist():
             if (  name.find("CVE-"+str(cveperiod)) == -1 ) or not name.endswith(".json"):
                 continue
-            data_to_return.append(data.read(name))
+            data_to_return.insert(0,data.read(name))
         data.close()
         if (inputfile is None):
             local.close()
