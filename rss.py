@@ -125,6 +125,12 @@ def get_cve_org_json(date=None, inputfile=None):
         exit(1)
     return data_to_return
 
+def print_severity(sev):
+        severity_msg="Severity: "+sev
+        if (sev.lower()=="high" or sev.lower() == "critical"):
+                severity_msg=f"{color.Fore.RED}{severity_msg}{color.Style.RESET_ALL}"
+        print(severity_msg)
+
 
 def print_entry_keys(url):
     try:
@@ -201,7 +207,7 @@ def print_cve_org_details(entry,keyword=None,exact_word=False):
             text =  entry['cna']['affected'][0]['product']
         except:
             text = "no related product found"
-        print(f"Product: {text}")
+        print(f"{color.Fore.YELLOW}Product:{color.Style.RESET_ALL} {text}")
 
     nb_link=len(entry['cna']['references'])
     try:
@@ -216,23 +222,20 @@ def print_cve_org_details(entry,keyword=None,exact_word=False):
         pass
     print_link(f"{nb_link} link(s): \n{link}")
 
-def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False):
+def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False,product=None):
     NewsFeed = feedparser.parse(url)
     NewsFeed_size=len(NewsFeed.entries)
     print ("There are " + str(NewsFeed_size) +" entries")
     print("******************************\n\n")
-    start_range = NewsFeed_size
+    start_range = NewsFeed_size-1
     end_range = 0
-    if (start_range > 1):
-        start_range = start_range - 1
     if (nb_entry >  NewsFeed_size):
         print("You ask for number of entries more than current one")
-        end_range = 0
     else:
         if (nb_entry != 0) : 
             end_range =  NewsFeed_size - nb_entry
-        if(end_range > 1):
-            end_range = end_range - 1
+    if(end_range > 1):
+        end_range = end_range - 1
     for i in range(start_range,end_range,-1):
         try:
             entry = NewsFeed.entries[i]
@@ -259,7 +262,7 @@ def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
 
 
 
-def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False):
+def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False,product=None):
     try:
         if (not os.path.exists(url)):
             url=get_nist_json(keydate)
@@ -306,7 +309,7 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
                     continue
             print(entry['cve']['CVE_data_meta']['ID'])
             print(entry['publishedDate'])
-            print("Severity: "+sev)
+            print_severity(sev)
             print_nist_details(entry,keyword)
         except:
             if not quiet_on_error:
@@ -315,7 +318,7 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
 
 
 
-def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False):
+def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False,product=None):
     try:
         data_content=get_cve_org_json(keydate,url)
         data_size=len(data_content)
@@ -351,6 +354,11 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,qu
                 tags=entry['cve']['references']['reference_data'][0]['tags'][0]
             except:
                 pass
+            affected_product=""
+            try:
+                affected_product=entry['cna']['affected'][0]['product']
+            except:
+                pass
             if severity is not None and sev.lower() != severity.lower():
                     continue
             if ignore_word is not None:
@@ -361,12 +369,15 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,qu
                     continue
                 if exact_word and (not re.search(r'\b'+keyword+r'\b',description) ) and (not re.search(r'\b'+keyword+r'\b',tags) ):
                     continue
+            if product is not None:
+                if (affected_product.lower().find(product.lower()) == -1) :
+                    continue
             if keydate is not None:
                 if (NewsFeed['cveMetadata']['datePublished'].lower().find(keydate.lower()) == -1) :
                     continue
             print(NewsFeed['cveMetadata']['cveId'])
             print(NewsFeed['cveMetadata']['datePublished'])
-            print("Severity: "+sev)
+            print_severity(sev)
             print_cve_org_details(entry,keyword,exact_word)
         except:
             if not quiet_on_error:
@@ -432,6 +443,7 @@ if __name__ == '__main__':
         \n for cve.org : low|medium|high|critical ",  type=str, default=None )
     parser.add_argument('-k','--key',dest='kw',help="key word to look inside title of the feed,\n\
         for many words use quotes, e.g -k \"sql injection\" ", type=str)
+    parser.add_argument('-p','--product',dest='product',help="product affected", type=str)
     parser.add_argument('-v','--verbose',action='store_true', required=False,help="Display summary of elements")
     parser.add_argument('-l','--links',action='store_true', required=False,help="Display related link")
 
@@ -462,4 +474,6 @@ if __name__ == '__main__':
         showlink=True
     if args.links:
         showlink=True
-    cve_format_funs[source]['fun'](source_link,args.entryval,args.kw,args.pubdate,severity=args.severity,quiet_on_error=args.quiet,ignore_word=args.ignorew,exact_word=args.exact_key)
+    cve_format_funs[source]['fun'](source_link,args.entryval,args.kw,args.pubdate,severity=args.severity,quiet_on_error=args.quiet,
+                                   ignore_word=args.ignorew,exact_word=args.exact_key,
+                                   product=args.product)
