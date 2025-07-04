@@ -16,6 +16,7 @@ import re
 import tempfile as tmpfile
 from datetime import datetime
 import colorama as color
+import time
 
 def type_url(strurl):
     if validators.url(strurl):
@@ -66,33 +67,46 @@ def print_link(message):
 
 def get_nist_json(date=None):
     cveperiod="recent"
+    loop_range=[cveperiod]
     if date != None:
-        year=str(date).split('-')[0]
-        if year.isdigit() and int(year)>1000 :
-            cveperiod=year
-    url=nist_url+"/cve/1.1/nvdcve-1.1-"+cveperiod+".json.zip"
-    try:
-        response=requests.get(url)
-        local=tmpfile.NamedTemporaryFile('wb')
-        local.write(response.content)
-        data=zipfile.ZipFile(str(local.name))
-        data_to_return=data.read("nvdcve-1.1-"+cveperiod+".json")
-        data.close()
-        local.close()
-        return data_to_return
-    except Exception as e:
-        print(f"Try to get {url} but failed, error {str(e)}")
-        exit(1)
+        if type(date) is str:
+            year=str(date).split('-')[0]
+            if year.isdigit() and int(year)>1000 :
+                cveperiod=[year,str(int(year)+1)]
+        else:
+            cveperiod=[str(date[0]).split('-')[0],str(date[1]).split('-')[0]]
+        loop_range=range(int(cveperiod[0]),int(cveperiod[1]))
+    data_to_return=b''
+    for i in loop_range:
+        url=nist_url+"/cve/1.1/nvdcve-1.1-"+str(i)+".json.zip"
+        try:
+            response=requests.get(url)
+            local=tmpfile.NamedTemporaryFile('wb')
+            local.write(response.content)
+            data=zipfile.ZipFile(str(local.name))
+            data_to_return=data.read("nvdcve-1.1-"+str(i)+".json")+data_to_return
+            data.close()
+            local.close()
+        except Exception as e:
+            print(f"Try to get {url} but failed, error {str(e)}")
+            exit(1)
+    return data_to_return
 
 def get_cve_org_json(date=None, inputfile=None):
     current_date = datetime.today()
     current_year = current_date.year
     current_date_suffix = current_date.strftime("%Y_%m_%d_%H_%M_%S")
-    cveperiod = current_year
+    cveperiod = [current_year,current_year]
     if date != None:
-        year=str(date).split('-')[0]
-        if year.isdigit() and int(year)>1000 :
-            cveperiod=year
+        if type(date) is str:
+            year=str(date).split('-')[0]
+            if year.isdigit() and int(year)>1000 :
+                cveperiod=[int(year),int(year)]
+        if type(date) is list and len(date)>=2:
+            year1=str(date[0]).split('-')[0]
+            year2=str(date[1]).split('-')[0]
+            if year1.isdigit() and int(year1)>1000 and year2.isdigit() and int(year2)>1000:
+                cveperiod=[int(year1),int(year2)]
     try:
         filename=""
         if (not os.path.isfile(inputfile)):
@@ -114,7 +128,13 @@ def get_cve_org_json(date=None, inputfile=None):
     try:
         data_to_return=[]
         for name in data.namelist():
-            if (  name.find("CVE-"+str(cveperiod)) == -1 ) or not name.endswith(".json"):
+            if not name.endswith(".json"):
+                continue
+            name_splited=name.split("-")
+            if len(name_splited) < 3:
+                continue
+            cve_year=name_splited[2]
+            if ( int(cve_year)<cveperiod[0]) or ( int(cve_year)>cveperiod[1] ):
                 continue
             data_to_return.insert(0,data.read(name))
         data.close()
@@ -227,16 +247,13 @@ def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
     NewsFeed_size=len(NewsFeed.entries)
     print ("There are " + str(NewsFeed_size) +" entries")
     print("******************************\n\n")
-    start_range = NewsFeed_size-1
-    end_range = 0
+    local_nb_entry = NewsFeed_size
     if (nb_entry >  NewsFeed_size):
         print("You ask for number of entries more than current one")
-    else:
-        if (nb_entry != 0) : 
-            end_range =  NewsFeed_size - nb_entry
-    if(end_range > 1):
-        end_range = end_range - 1
-    for i in range(start_range,end_range,-1):
+    if (nb_entry != 0) : 
+         local_nb_entry =  nb_entry
+    nb_found = 0
+    for i in range(NewsFeed_size-1,0,-1):
         try:
             entry = NewsFeed.entries[i]
             if ignore_word is not None:
@@ -252,13 +269,16 @@ def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
                 if (entry.title.lower().find(severity.lower()) == -1) and (entry.summary.lower().find(severity.lower()) == -1):
                     continue
             if keydate is not None:
-                if (entry.title.lower().find(keydate.lower()) == -1) :
+                if (type(keydate) is str) and (entry.title.lower().find(keydate.lower()) == -1) :
                     continue
             print(entry.title)
             print_cert_details(entry,keyword)
         except:
-            if not quiet_on_error:
-                print("No feed")
+            pass
+        nb_found +=1
+        if (nb_found == local_nb_entry):
+            break
+
 
 
 
@@ -274,13 +294,13 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
         print(f"{url} : seems bad" )
     print (f"There are {NewsFeed_size} entries")
     print("******************************\n\n")
-    r=nb_entry
-    if nb_entry == 0:
-        r = NewsFeed_size
-    if (r >  NewsFeed_size):
+    local_nb_entry=NewsFeed_size
+    if nb_entry != 0 :
+        local_nb_entry = nb_entry
+    if (nb_entry > NewsFeed_size):
         print("You ask for number of entries more than current available")
-        r = NewsFeed_size
-    for i in range(r):
+    nb_found=0
+    for i in range(NewsFeed_size):
         try:
             entry = NewsFeed['CVE_Items'][i]
             sev="unknown"
@@ -305,17 +325,31 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
                 if exact_word and (not re.search(r'\b'+keyword+r'\b',description) ) and (not re.search(r'\b'+keyword+r'\b',tags) ):
                     continue
             if keydate is not None:
-                if (entry['publishedDate'].lower().find(keydate.lower()) == -1) :
+                if (type(keydate) is str) and (entry['publishedDate'].lower().find(keydate.lower()) == -1) :
                     continue
+                if (type(keydate) is list):
+                    print(f"list {entry['publishedDate'].split("T")}")
+                    cvedate=""
+                    try:
+                        cvedate=time.strptime(entry['publishedDate'].split("T")[0], "%Y-%m-%d")
+                    except:
+                        pass
+                    try:
+                        dateref0=time.strptime(keydate[0], "%Y-%m-%d")
+                        dateref1=time.strptime(keydate[1], "%Y-%m-%d")
+                        if cvedate<dateref0 or cvedate>dateref1:
+                            continue
+                    except:
+                        pass
             print(entry['cve']['CVE_data_meta']['ID'])
             print(entry['publishedDate'])
             print_severity(sev)
             print_nist_details(entry,keyword)
         except:
-            if not quiet_on_error:
-                print("No feed")
-
-
+            pass
+        nb_found +=1
+        if (nb_found == local_nb_entry):
+            break
 
 
 def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False,product=None):
@@ -327,13 +361,14 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,qu
         print(f"{url} : seems bad" )
     print (f"There are {data_size} entries")
     print("******************************\n\n")
-    r=nb_entry
+    local_nb_entry=nb_entry
     if nb_entry == 0:
-        r = data_size
-    if (r >  data_size):
+        local_nb_entry = data_size
+    if (local_nb_entry >  data_size):
         print("You want too much data more than real entries")
-        r = data_size
-    for i in range(r):
+        local_nb_entry = data_size
+    nb_found=0
+    for i in range(data_size):
         try:
             NewsFeedObj = JsonContent(filesource=data_content[i],tag='containers')
             NewsFeed = NewsFeedObj.content()
@@ -373,15 +408,27 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,qu
                 if (affected_product.lower().find(product.lower()) == -1) :
                     continue
             if keydate is not None:
-                if (NewsFeed['cveMetadata']['datePublished'].lower().find(keydate.lower()) == -1) :
+                if (type(keydate) is str) and (NewsFeed['cveMetadata']['datePublished'].lower().find(keydate.lower()) == -1) :
                     continue
+                if (type(keydate) is list):
+                    try:
+                        dateref0=time.strptime(keydate[0], "%Y-%m-%d")
+                        dateref1=time.strptime(keydate[1], "%Y-%m-%d")
+                        cvedate=time.strptime(NewsFeed['cveMetadata']['datePublished'].split("T")[0],"%Y-%m-%d")
+                        if cvedate<dateref0 or cvedate>dateref1:
+                            continue
+                    except:
+                        pass
+                        #print("date not found")
             print(NewsFeed['cveMetadata']['cveId'])
             print(NewsFeed['cveMetadata']['datePublished'])
             print_severity(sev)
             print_cve_org_details(entry,keyword,exact_word)
         except:
-            if not quiet_on_error:
-                print("No feed")
+            pass
+        nb_found+=1
+        if (nb_found == local_nb_entry):
+            break
 
 def get_main_zip_cve_org():
     response=requests.get(cve_org_zip_url)
@@ -438,6 +485,10 @@ if __name__ == '__main__':
         date format for ssi.gouv.fr : 12 mars 2024\n\
         for nist,cve.org :  yyyy-mm-dd\n\
         for all you can set only the year: yyyy ")
+    parser.add_argument('-b','--between',dest='pubdaterange',help="to look for CVE on published date\n\
+        date format for ssi.gouv.fr : 12 mars 2024\n\
+        for nist,cve.org :  yyyy-mm-dd--yyyy-mm-dd\n\
+        for all you can set only the year: yyyy;yyyy ")
     parser.add_argument('-s','--severity',dest='severity', help=" for cert ssi : critique|haute|medium\
         \n for nist : high|critical \
         \n for cve.org : low|medium|high|critical ",  type=str, default=None )
@@ -474,6 +525,15 @@ if __name__ == '__main__':
         showlink=True
     if args.links:
         showlink=True
+    if args.pubdaterange is not None:
+        daterange=args.pubdaterange.split("--")
+        if len(daterange)>=2:
+            if len(daterange[0].split("-"))<=1:
+                daterange[0]=daterange[0]+"-01-01"
+            if len(daterange[1].split("-"))<=1:
+                daterange[1]=daterange[1]+"-01-01"
+            args.pubdate=[daterange[0],daterange[1]]
+            print(daterange[0],daterange[1])
     cve_format_funs[source]['fun'](source_link,args.entryval,args.kw,args.pubdate,severity=args.severity,quiet_on_error=args.quiet,
                                    ignore_word=args.ignorew,exact_word=args.exact_key,
                                    product=args.product)
