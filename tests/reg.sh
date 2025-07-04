@@ -16,9 +16,10 @@ test_ssi()
 test_nist()
 {
     echo "=============NIST ==================="
-    ${PYTHON} ${root_dir}/rss.py -v -n 3 --nist
+    ${PYTHON} ${root_dir}/rss.py -v --nist -n 3
     ${PYTHON} ${root_dir}/rss.py -v --nist -D $(date +%Y) | head -n3
-    ${PYTHON} ${root_dir}/rss.py -v -q -D $(date +%Y) -s critical
+    ${PYTHON} ${root_dir}/rss.py -v --nist -q -D $(date +%Y) -s critical
+    ${PYTHON} ${root_dir}/rss.py -v --nist -i CVE-2025-25022
 
 }
 test_cve()

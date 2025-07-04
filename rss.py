@@ -24,6 +24,13 @@ def type_url(strurl):
     else:
         raise argparse.ArgumentTypeError("Should be an real web link")
 
+def type_cve(cveid):
+    pattern= r'^CVE-(\d{4})-(\d{1,10})$'
+    if bool(re.match(pattern,cveid)):
+        return cveid
+    else:
+        raise argparse.ArgumentTypeError("Should be an string like CVE-xxxx-YYYYY where x and Y are digits")
+
 def type_file(filename):
     if os.path.isfile(filename):
         return filename
@@ -242,7 +249,7 @@ def print_cve_org_details(entry,keyword=None,exact_word=False):
         pass
     print_link(f"{nb_link} link(s): \n{link}")
 
-def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False,product=None):
+def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False,product=None,cve_id=None):
     NewsFeed = feedparser.parse(url)
     NewsFeed_size=len(NewsFeed.entries)
     print ("There are " + str(NewsFeed_size) +" entries")
@@ -282,7 +289,7 @@ def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
 
 
 
-def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False,product=None):
+def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False,product=None,cve_id=None):
     try:
         if (not os.path.exists(url)):
             url=get_nist_json(keydate)
@@ -314,6 +321,9 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
                 tags=entry['cve']['references']['reference_data'][0]['tags'][0]
             except:
                 pass
+            if cve_id is not None:
+                if (entry['cve']['CVE_data_meta']['ID'] != cve_id):
+                    continue
             if severity is not None and sev.lower() != severity.lower():
                     continue
             if ignore_word is not None:
@@ -345,6 +355,8 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
             print(entry['publishedDate'])
             print_severity(sev)
             print_nist_details(entry,keyword)
+            if cve_id is not None:
+                break
         except:
             pass
         nb_found +=1
@@ -352,7 +364,7 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
             break
 
 
-def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False,product=None):
+def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False,product=None,cve_id=None):
     try:
         data_content=get_cve_org_json(keydate,url)
         data_size=len(data_content)
@@ -394,6 +406,9 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,qu
                 affected_product=entry['cna']['affected'][0]['product']
             except:
                 pass
+            if cve_id is not None:
+                if (NewsFeed['cveMetadata']['cveId'] != cve_id):
+                    continue
             if severity is not None and sev.lower() != severity.lower():
                     continue
             if ignore_word is not None:
@@ -424,6 +439,8 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,qu
             print(NewsFeed['cveMetadata']['datePublished'])
             print_severity(sev)
             print_cve_org_details(entry,keyword,exact_word)
+            if cve_id is not None:
+                break
         except:
             pass
         nb_found+=1
@@ -504,6 +521,7 @@ if __name__ == '__main__':
     parser.add_argument('-q','--quiet',action='store_true', required=False,help="Do not show empty feed")
     parser.add_argument('-d','--debug',action='store_true', required=False,help="Show keys in the rss fields")
     parser.add_argument('--exact-key',action='store_true', required=False,help="exact key")
+    parser.add_argument('-i','--id',dest='cve_id', help=" exact cve id",  type=type_cve, default=None )
     args = parser.parse_args()
 
     if args.get_cve_org_data:
@@ -525,6 +543,8 @@ if __name__ == '__main__':
         showlink=True
     if args.links:
         showlink=True
+    if args.cve_id is not None and args.pubdate is None:
+        args.pubdate=args.cve_id.split("-")[1]
     if args.pubdaterange is not None:
         daterange=args.pubdaterange.split("--")
         if len(daterange)>=2:
@@ -533,7 +553,7 @@ if __name__ == '__main__':
             if len(daterange[1].split("-"))<=1:
                 daterange[1]=daterange[1]+"-01-01"
             args.pubdate=[daterange[0],daterange[1]]
-            print(daterange[0],daterange[1])
+    
     cve_format_funs[source]['fun'](source_link,args.entryval,args.kw,args.pubdate,severity=args.severity,quiet_on_error=args.quiet,
                                    ignore_word=args.ignorew,exact_word=args.exact_key,
-                                   product=args.product)
+                                   product=args.product,cve_id=args.cve_id)
