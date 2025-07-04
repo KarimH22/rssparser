@@ -19,7 +19,9 @@ test_nist()
     ${PYTHON} ${root_dir}/rss.py -v --nist -n 3
     ${PYTHON} ${root_dir}/rss.py -v --nist -D $(date +%Y) | head -n3
     ${PYTHON} ${root_dir}/rss.py -v --nist -q -D $(date +%Y) -s critical
+    ${PYTHON} ${root_dir}/rss.py -v --nist -b 2016--2018 -s critical -n 7
     ${PYTHON} ${root_dir}/rss.py -v --nist -i CVE-2025-25022
+    ${PYTHON} ${root_dir}/rss.py -v --nist -k Linux -b 2016--2025
 
 }
 test_cve()
@@ -29,6 +31,7 @@ test_cve()
     ${PYTHON} ${root_dir}/rss.py --cve-org -f ./cvelistV5-main.zip -v -n 3
     ${PYTHON} ${root_dir}/rss.py --cve-org -f ./cvelistV5-main.zip -v -D $(date +%Y)
     ${PYTHON} ${root_dir}/rss.py --cve-org -f ./cvelistV5-main.zip -v -D $(date +%Y) -s critical
+    ${PYTHON} ${root_dir}/rss.py --cve-org -f ./cvelistV5-main.zip -v -k Linux -b 2016--2025
 }
 
 args=$1
