@@ -182,6 +182,15 @@ def print_entry_keys(url):
     except Exception as e:
         print(f"Link is bad or not rss feed so that no keys attribute : {e}")
 
+def dump_json_entry(entry):
+    if not dump_json:
+        return
+    for key in entry.keys():
+        print(f"Key:{key}")
+        for i in entry[key]:
+            print(f"Value:{entry[key][i]}")
+
+
 def print_cert_details(entry,keyword=None):
     if verbose:
         try:
@@ -214,6 +223,18 @@ def print_nist_details(entry,keyword=None):
         except:
             text = "Nothing found"
         print(text)
+        cwe="NA"
+        try:
+            cwe =  entry['cve']['problemtype']['problemtype_data'][0]['description'][0]['value']
+        except:
+            pass
+        print(f"{color.Fore.YELLOW}CWE:{color.Style.RESET_ALL} {cwe}")
+        vectorstring="NA"
+        try:
+            vectorstring =  entry['impact']['baseMetricV3']['cvssV3']['vectorString']
+        except:
+            pass
+        print(f"{color.Fore.YELLOW}vectorString:{color.Style.RESET_ALL} {vectorstring}")
     try:
         link = entry['cve']['references']['reference_data'][0]['url']
     except:
@@ -235,6 +256,18 @@ def print_cve_org_details(entry,keyword=None,exact_word=False):
         except:
             text = "no related product found"
         print(f"{color.Fore.YELLOW}Product:{color.Style.RESET_ALL} {text}")
+        cwe="NA"
+        try:
+            cwe =  entry['cna']['problemTypes'][0]['descriptions'][0]['cweId']
+        except:
+            pass
+        print(f"{color.Fore.YELLOW}CWE:{color.Style.RESET_ALL} {cwe}")
+        vectorstring="NA"
+        try:
+            vectorstring =  entry['cna']['metrics'][0]['cvssV3_1']['vectorString']
+        except:
+            pass
+        print(f"{color.Fore.YELLOW}vectorString:{color.Style.RESET_ALL} {vectorstring}")
 
     nb_link=len(entry['cna']['references'])
     try:
@@ -321,8 +354,7 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
                 tags=entry['cve']['references']['reference_data'][0]['tags'][0]
             except:
                 pass
-            if cve_id is not None:
-                if (entry['cve']['CVE_data_meta']['ID'] != cve_id):
+            if cve_id is not None and (entry['cve']['CVE_data_meta']['ID'] != cve_id):
                     continue
             if severity is not None and sev.lower() != severity.lower():
                     continue
@@ -356,6 +388,7 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
             print_severity(sev)
             print_nist_details(entry,keyword)
             if cve_id is not None:
+                dump_json_entry(entry)
                 break
         except:
             pass
@@ -406,8 +439,7 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,qu
                 affected_product=entry['cna']['affected'][0]['product']
             except:
                 pass
-            if cve_id is not None:
-                if (NewsFeed['cveMetadata']['cveId'] != cve_id):
+            if cve_id is not None and (NewsFeed['cveMetadata']['cveId'] != cve_id):
                     continue
             if severity is not None and sev.lower() != severity.lower():
                     continue
@@ -440,6 +472,7 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,qu
             print_severity(sev)
             print_cve_org_details(entry,keyword,exact_word)
             if cve_id is not None:
+                dump_json_entry(entry)
                 break
         except:
             pass
@@ -479,6 +512,7 @@ cve_format_funs={
 showlink=False
 verbose=False
 debug_mode=False
+dump_json=False
 # Press the green button in the gutter to run the script.
 if __name__ == '__main__':
 
@@ -522,6 +556,7 @@ if __name__ == '__main__':
     parser.add_argument('-d','--debug',action='store_true', required=False,help="Show keys in the rss fields")
     parser.add_argument('--exact-key',action='store_true', required=False,help="exact key")
     parser.add_argument('-i','--id',dest='cve_id', help=" exact cve id",  type=type_cve, default=None )
+    parser.add_argument('--dump',action='store_true', required=False,help="Dump json all cve id")
     args = parser.parse_args()
 
     if args.get_cve_org_data:
@@ -543,8 +578,13 @@ if __name__ == '__main__':
         showlink=True
     if args.links:
         showlink=True
+    if args.dump:
+        dump_json=True
     if args.cve_id is not None and args.pubdate is None:
         args.pubdate=args.cve_id.split("-")[1]
+        if args.nist and (args.cve_id.split("-")[1] == datetime.now().year):
+            args.pubdate=None
+        print(args.cve_id.split("-")[1], datetime.now().year)
     if args.pubdaterange is not None:
         daterange=args.pubdaterange.split("--")
         if len(daterange)>=2:
