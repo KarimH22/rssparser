@@ -18,6 +18,9 @@ from datetime import datetime
 import colorama as color
 import time
 
+####################################
+########### TYPE
+####################################
 def type_url(strurl):
     if validators.url(strurl):
         return strurl
@@ -36,7 +39,9 @@ def type_file(filename):
         return filename
     else:
         raise argparse.ArgumentTypeError("Should be an existing file")
-
+####################################
+########### JsonContent class
+####################################
 class JsonContent:
     def __init__(self, filesource,tag='CVE_Items'):
         self.json_content = None
@@ -63,6 +68,10 @@ class JsonContent:
         return len(self.json_content[self.main_tag])
 # End class
 
+####################################
+########### COMMON
+####################################
+
 def print_debug(message):
     if (debug_mode):
         print(message)
@@ -71,86 +80,6 @@ def print_link(message):
     if showlink:
         print(message)
         print("==============================")
-
-def get_nist_json(date=None):
-    cveperiod="recent"
-    loop_range=[cveperiod]
-    if date != None:
-        if type(date) is str:
-            year=str(date).split('-')[0]
-            if year.isdigit() and int(year)>1000 :
-                cveperiod=[year,str(int(year)+1)]
-        else:
-            cveperiod=[str(date[0]).split('-')[0],str(date[1]).split('-')[0]]
-        loop_range=range(int(cveperiod[0]),int(cveperiod[1]))
-    data_to_return=b''
-    for i in loop_range:
-        url=nist_url+"/cve/1.1/nvdcve-1.1-"+str(i)+".json.zip"
-        try:
-            response=requests.get(url)
-            local=tmpfile.NamedTemporaryFile('wb')
-            local.write(response.content)
-            data=zipfile.ZipFile(str(local.name))
-            data_to_return=data.read("nvdcve-1.1-"+str(i)+".json")+data_to_return
-            data.close()
-            local.close()
-        except Exception as e:
-            print(f"Try to get {url} but failed, error {str(e)}")
-            exit(1)
-    return data_to_return
-
-def get_cve_org_json(date=None, inputfile=None):
-    current_date = datetime.today()
-    current_year = current_date.year
-    current_date_suffix = current_date.strftime("%Y_%m_%d_%H_%M_%S")
-    cveperiod = [current_year,current_year]
-    if date != None:
-        if type(date) is str:
-            year=str(date).split('-')[0]
-            if year.isdigit() and int(year)>1000 :
-                cveperiod=[int(year),int(year)]
-        if type(date) is list and len(date)>=2:
-            year1=str(date[0]).split('-')[0]
-            year2=str(date[1]).split('-')[0]
-            if year1.isdigit() and int(year1)>1000 and year2.isdigit() and int(year2)>1000:
-                cveperiod=[int(year1),int(year2)]
-    try:
-        filename=""
-        if (not os.path.isfile(inputfile)):
-            response=requests.get(cve_org_zip_url)
-            local=tmpfile.NamedTemporaryFile('wb')    
-            local.write(response.content)
-            filename=str(local.name)
-        else:
-            if(inputfile.endswith("json")):
-                f=open(inputfile,'r')
-                data_to_return=f.read()
-                f.close()
-                return data_to_return
-            filename=os.path.abspath(inputfile)
-        data=zipfile.ZipFile(filename)
-    except Exception as e:
-        print(f"Try to get {filename} but failed, error {str(e)}")
-        exit(1)
-    try:
-        data_to_return=[]
-        for name in data.namelist():
-            if not name.endswith(".json"):
-                continue
-            name_splited=name.split("-")
-            if len(name_splited) < 3:
-                continue
-            cve_year=name_splited[2]
-            if ( int(cve_year)<cveperiod[0]) or ( int(cve_year)>cveperiod[1] ):
-                continue
-            data_to_return.insert(0,data.read(name))
-        data.close()
-        if (inputfile is None):
-            local.close()
-    except Exception as e:
-        print(f"Try to fill  data_to_return but failed at {name}, error {str(e)}")
-        exit(1)
-    return data_to_return
 
 def print_severity(sev):
         severity_msg="Severity: "+sev
@@ -190,7 +119,9 @@ def dump_json_entry(entry):
         for i in entry[key]:
             print(f"Value:{entry[key][i]}")
 
-
+####################################
+########### CERT
+####################################
 def print_cert_details(entry,keyword=None):
     if verbose:
         try:
@@ -213,6 +144,73 @@ def print_cert_details(entry,keyword=None):
          print("Href was not found")
     print_link(link)
 
+def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False,product=None,cve_id=None):
+    NewsFeed = feedparser.parse(url)
+    NewsFeed_size=len(NewsFeed.entries)
+    print ("There are " + str(NewsFeed_size) +" entries")
+    print("******************************\n\n")
+    local_nb_entry = NewsFeed_size
+    if (nb_entry >  NewsFeed_size):
+        print("You ask for number of entries more than current one")
+    if (nb_entry != 0) : 
+         local_nb_entry =  nb_entry
+    nb_found = 0
+    for i in range(NewsFeed_size,0,-1):
+        try:
+            entry = NewsFeed.entries[i]
+            if ignore_word is not None:
+                if (entry.title.lower().find(ignore_word.lower()) != -1) or (entry.summary.lower().find(ignore_word.lower()) != -1):
+                    continue
+            if keyword is not None:
+                if (entry.title.lower().find(keyword.lower()) == -1) and (entry.summary.lower().find(keyword.lower()) == -1):
+                    continue
+                if exact_word and (not re.search(r'\b'+keyword+r'\b',entry.title)) and (not re.search(r'\b'+keyword+r'\b',entry.summary)) :
+                    print(f"Look for {keyword} : failed")
+                    continue
+            if severity is not None:
+                if (entry.title.lower().find(severity.lower()) == -1) and (entry.summary.lower().find(severity.lower()) == -1):
+                    continue
+            if keydate is not None:
+                if (type(keydate) is str) and (entry.title.lower().find(keydate.lower()) == -1) :
+                    continue
+            print(entry.title)
+            print_cert_details(entry,keyword)
+        except:
+            pass
+        nb_found +=1
+        if (nb_found == local_nb_entry):
+            break
+
+####################################
+########### NIST
+####################################
+
+def get_nist_json(date=None):
+    cveperiod="recent"
+    loop_range=[cveperiod]
+    if date != None:
+        if type(date) is str:
+            year=str(date).split('-')[0]
+            if year.isdigit() and int(year)>1000 :
+                cveperiod=[year,str(int(year)+1)]
+        else:
+            cveperiod=[str(date[0]).split('-')[0],str(date[1]).split('-')[0]]
+        loop_range=range(int(cveperiod[0]),int(cveperiod[1]))
+    data_to_return=b''
+    for i in loop_range:
+        url=nist_url+"/cve/1.1/nvdcve-1.1-"+str(i)+".json.zip"
+        try:
+            response=requests.get(url)
+            local=tmpfile.NamedTemporaryFile('wb')
+            local.write(response.content)
+            data=zipfile.ZipFile(str(local.name))
+            data_to_return=data.read("nvdcve-1.1-"+str(i)+".json")+data_to_return
+            data.close()
+            local.close()
+        except Exception as e:
+            print(f"Try to get {url} but failed, error {str(e)}")
+            exit(1)
+    return data_to_return
 
 def print_nist_details(entry,keyword=None):
     if verbose:
@@ -241,86 +239,6 @@ def print_nist_details(entry,keyword=None):
         link = "Entry has no links attribute"
         print("Link error")
     print_link(link)
-
-def print_cve_org_details(entry,keyword=None,exact_word=False):
-    if verbose:
-        try:
-            text =  entry['cna']['descriptions'][0]['value']
-            if keyword is not None:
-                text=text.replace(keyword,f"{color.Fore.RED}{keyword}{color.Style.RESET_ALL}")
-        except:
-            text = "Nothing found"
-        print(text)
-        try:
-            text =  entry['cna']['affected'][0]['product']
-        except:
-            text = "no related product found"
-        print(f"{color.Fore.YELLOW}Product:{color.Style.RESET_ALL} {text}")
-        cwe="NA"
-        try:
-            cwe =  entry['cna']['problemTypes'][0]['descriptions'][0]['cweId']
-        except:
-            pass
-        print(f"{color.Fore.YELLOW}CWE:{color.Style.RESET_ALL} {cwe}")
-        vectorstring="NA"
-        try:
-            vectorstring =  entry['cna']['metrics'][0]['cvssV3_1']['vectorString']
-        except:
-            pass
-        print(f"{color.Fore.YELLOW}vectorString:{color.Style.RESET_ALL} {vectorstring}")
-
-    nb_link=len(entry['cna']['references'])
-    try:
-        link = entry['cna']['references'][0]['url']
-    except:
-        link = "Entry has no links attribute"
-    try:
-        for link_idx in range(1,nb_link):
-            link += "\n" + entry['cna']['references'][link_idx]['url']
-    except:
-        print("Loop link failed")
-        pass
-    print_link(f"{nb_link} link(s): \n{link}")
-
-def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False,product=None,cve_id=None):
-    NewsFeed = feedparser.parse(url)
-    NewsFeed_size=len(NewsFeed.entries)
-    print ("There are " + str(NewsFeed_size) +" entries")
-    print("******************************\n\n")
-    local_nb_entry = NewsFeed_size
-    if (nb_entry >  NewsFeed_size):
-        print("You ask for number of entries more than current one")
-    if (nb_entry != 0) : 
-         local_nb_entry =  nb_entry
-    nb_found = 0
-    for i in range(NewsFeed_size-1,0,-1):
-        try:
-            entry = NewsFeed.entries[i]
-            if ignore_word is not None:
-                if (entry.title.lower().find(ignore_word.lower()) != -1) or (entry.summary.lower().find(ignore_word.lower()) != -1):
-                    continue
-            if keyword is not None:
-                if (entry.title.lower().find(keyword.lower()) == -1) and (entry.summary.lower().find(keyword.lower()) == -1):
-                    continue
-                if exact_word and (not re.search(r'\b'+keyword+r'\b',entry.title)) and (not re.search(r'\b'+keyword+r'\b',entry.summary)) :
-                    print(f"Look for {keyword} : failed")
-                    continue
-            if severity is not None:
-                if (entry.title.lower().find(severity.lower()) == -1) and (entry.summary.lower().find(severity.lower()) == -1):
-                    continue
-            if keydate is not None:
-                if (type(keydate) is str) and (entry.title.lower().find(keydate.lower()) == -1) :
-                    continue
-            print(entry.title)
-            print_cert_details(entry,keyword)
-        except:
-            pass
-        nb_found +=1
-        if (nb_found == local_nb_entry):
-            break
-
-
-
 
 def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False,product=None,cve_id=None):
     try:
@@ -390,12 +308,109 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
             if cve_id is not None:
                 dump_json_entry(entry)
                 break
+            nb_found +=1
+            if (nb_found == local_nb_entry):
+                break
         except:
             pass
-        nb_found +=1
-        if (nb_found == local_nb_entry):
-            break
 
+
+####################################
+########### CVE.ORG
+####################################
+
+def get_cve_org_json(date=None, inputfile=None):
+    current_date = datetime.today()
+    current_year = current_date.year
+    current_date_suffix = current_date.strftime("%Y_%m_%d_%H_%M_%S")
+    cveperiod = [current_year,current_year]
+    if date != None:
+        if type(date) is str:
+            year=str(date).split('-')[0]
+            if year.isdigit() and int(year)>1000 :
+                cveperiod=[int(year),int(year)]
+        if type(date) is list and len(date)>=2:
+            year1=str(date[0]).split('-')[0]
+            year2=str(date[1]).split('-')[0]
+            if year1.isdigit() and int(year1)>1000 and year2.isdigit() and int(year2)>1000:
+                cveperiod=[int(year1),int(year2)]
+    try:
+        filename=""
+        if (not os.path.isfile(inputfile)):
+            response=requests.get(cve_org_zip_url)
+            local=tmpfile.NamedTemporaryFile('wb')    
+            local.write(response.content)
+            filename=str(local.name)
+        else:
+            if(inputfile.endswith("json")):
+                f=open(inputfile,'r')
+                data_to_return=f.read()
+                f.close()
+                return data_to_return
+            filename=os.path.abspath(inputfile)
+        data=zipfile.ZipFile(filename)
+    except Exception as e:
+        print(f"Try to get {filename} but failed, error {str(e)}")
+        exit(1)
+    try:
+        data_to_return=[]
+        for name in data.namelist():
+            if not name.endswith(".json"):
+                continue
+            name_splited=name.split("-")
+            if len(name_splited) < 3:
+                continue
+            cve_year=name_splited[2]
+            if ( int(cve_year)<cveperiod[0]) or ( int(cve_year)>cveperiod[1] ):
+                continue
+            data_to_return.insert(0,data.read(name))
+        data.close()
+        if (inputfile is None):
+            local.close()
+    except Exception as e:
+        print(f"Try to fill  data_to_return but failed at {name}, error {str(e)}")
+        exit(1)
+    return data_to_return
+
+def print_cve_org_details(entry,keyword=None,exact_word=False):
+    if verbose:
+        try:
+            text =  entry['cna']['descriptions'][0]['value']
+            if keyword is not None:
+                text=text.replace(keyword,f"{color.Fore.RED}{keyword}{color.Style.RESET_ALL}")
+        except:
+            text = "Nothing found"
+        print(text)
+        try:
+            text =  entry['cna']['affected'][0]['product']
+        except:
+            text = "no related product found"
+        print(f"{color.Fore.YELLOW}Product:{color.Style.RESET_ALL} {text}")
+        cwe="NA"
+        try:
+            cwe =  entry['cna']['problemTypes'][0]['descriptions'][0]['cweId']
+        except:
+            pass
+        print(f"{color.Fore.YELLOW}CWE:{color.Style.RESET_ALL} {cwe}")
+        vectorstring="NA"
+        try:
+            vectorstring =  entry['cna']['metrics'][0]['cvssV3_1']['vectorString']
+        except:
+            pass
+        print(f"{color.Fore.YELLOW}vectorString:{color.Style.RESET_ALL} {vectorstring}")
+
+    nb_link=len(entry['cna']['references'])
+    try:
+        link = entry['cna']['references'][0]['url']
+    except:
+        link = "Entry has no links attribute"
+    try:
+        for link_idx in range(1,nb_link):
+            link += "\n" + entry['cna']['references'][link_idx]['url']
+    except:
+        print("Loop link failed")
+        pass
+    print_link(f"{nb_link} link(s): \n{link}")
 
 def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False,product=None,cve_id=None):
     try:
@@ -474,11 +489,11 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,qu
             if cve_id is not None:
                 dump_json_entry(entry)
                 break
+            nb_found+=1
+            if (nb_found == local_nb_entry):
+                break
         except:
             pass
-        nb_found+=1
-        if (nb_found == local_nb_entry):
-            break
 
 def get_main_zip_cve_org():
     response=requests.get(cve_org_zip_url)
