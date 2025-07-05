@@ -599,7 +599,6 @@ if __name__ == '__main__':
         args.pubdate=args.cve_id.split("-")[1]
         if args.nist and (args.cve_id.split("-")[1] == datetime.now().year):
             args.pubdate=None
-        print(args.cve_id.split("-")[1], datetime.now().year)
     if args.pubdaterange is not None:
         daterange=args.pubdaterange.split("--")
         if len(daterange)>=2:
