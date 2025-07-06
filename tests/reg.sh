@@ -1,4 +1,4 @@
-#!/bin/bash
+#!/bin/bash -e
 
 test_dir=$(dirname $(readlink -f "${BASH_SOURCE[0]}"))
 root_dir=$(readlink -f ${test_dir}/..)

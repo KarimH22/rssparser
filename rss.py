@@ -193,10 +193,12 @@ def get_nist_json(date=None):
         if type(date) is str:
             year=str(date).split('-')[0]
             if year.isdigit() and int(year)>1000 :
-                cveperiod=[year,str(int(year)+1)]
+                cveperiod=[int(year),int(year)]
         else:
-            cveperiod=[str(date[0]).split('-')[0],str(date[1]).split('-')[0]]
-        loop_range=range(int(cveperiod[0]),int(cveperiod[1]))
+            a=date[0].split('-')[0]
+            b=date[1].split('-')[0]
+            cveperiod=sorted([int(a),int(b)])
+        loop_range=range(cveperiod[0],cveperiod[1]+1)
     data_to_return=b''
     for i in loop_range:
         url=nist_url+"/cve/"+NIST_JSON_VERSION+"/nvdcve-"+NIST_JSON_VERSION+"-"+str(i)+".json.zip"
@@ -205,7 +207,7 @@ def get_nist_json(date=None):
             local=tmpfile.NamedTemporaryFile('wb')
             local.write(response.content)
             data=zipfile.ZipFile(str(local.name))
-            data_to_return=data.read("nvdcve-"+NIST_JSON_VERSION+"-"+str(i)+".json")+data_to_return
+            data_to_return=data.read("nvdcve-"+NIST_JSON_VERSION+"-"+str(i)+".json") + data_to_return
             data.close()
             local.close()
         except Exception as e:
@@ -378,7 +380,6 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
 def get_cve_org_json(date=None, inputfile=None):
     current_date = datetime.today()
     current_year = current_date.year
-    current_date_suffix = current_date.strftime("%Y_%m_%d_%H_%M_%S")
     cveperiod = [current_year,current_year]
     if date != None:
         if type(date) is str:
@@ -389,7 +390,7 @@ def get_cve_org_json(date=None, inputfile=None):
             year1=str(date[0]).split('-')[0]
             year2=str(date[1]).split('-')[0]
             if year1.isdigit() and int(year1)>1000 and year2.isdigit() and int(year2)>1000:
-                cveperiod=[int(year1),int(year2)]
+                cveperiod=sorted([int(year1),int(year2)])
     try:
         filename=""
         if (not os.path.isfile(inputfile)):
