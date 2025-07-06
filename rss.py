@@ -43,7 +43,7 @@ def type_file(filename):
 ########### JsonContent class
 ####################################
 class JsonContent:
-    def __init__(self, filesource,tag='CVE_Items'):
+    def __init__(self, filesource,tag='cve'):
         self.json_content = None
         self.main_tag=tag
         if (os.path.isfile(filesource)):
@@ -186,6 +186,7 @@ def print_cert_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
 ####################################
 
 def get_nist_json(date=None):
+    NIST_JSON_VERSION="2.0"
     cveperiod="recent"
     loop_range=[cveperiod]
     if date != None:
@@ -198,13 +199,13 @@ def get_nist_json(date=None):
         loop_range=range(int(cveperiod[0]),int(cveperiod[1]))
     data_to_return=b''
     for i in loop_range:
-        url=nist_url+"/cve/1.1/nvdcve-1.1-"+str(i)+".json.zip"
+        url=nist_url+"/cve/"+NIST_JSON_VERSION+"/nvdcve-"+NIST_JSON_VERSION+"-"+str(i)+".json.zip"
         try:
             response=requests.get(url)
             local=tmpfile.NamedTemporaryFile('wb')
             local.write(response.content)
             data=zipfile.ZipFile(str(local.name))
-            data_to_return=data.read("nvdcve-1.1-"+str(i)+".json")+data_to_return
+            data_to_return=data.read("nvdcve-"+NIST_JSON_VERSION+"-"+str(i)+".json")+data_to_return
             data.close()
             local.close()
         except Exception as e:
@@ -212,39 +213,100 @@ def get_nist_json(date=None):
             exit(1)
     return data_to_return
 
+def get_nist_id(entry):
+    cve_id=""
+    try:
+        cve_id=entry['cve']['id']
+    except:
+        pass
+    return cve_id
+
+def get_nist_description(entry):
+    desc ="No description"
+    try:
+        desc =  entry['cve']['descriptions'][0]['value']
+    except:
+        pass
+    return desc
+
+def get_nist_severity(entry):
+    sev="unknown"
+    for key in entry['cve']['metrics'].keys():
+        if str(key).find("cvssMetricv3"):
+            try:
+                sev=entry['cve']['metrics'][key][0]['cvssData']['baseSeverity']
+                break
+            except:
+                pass
+    return sev
+
+def get_nist_tags(entry):
+    tags=""
+    try:
+        tags=entry['cve']['cveTags'].joined(",")
+    except:
+        pass
+    return tags
+
+def get_nist_affected_product(entry):
+    products=""
+    return products
+
+def get_nist_vector_string(entry):
+    vector_string=""
+    for key in entry['cve']['metrics'].keys():
+        if str(key).find("cvssMetricv3"):
+            try:
+                vector_string=entry['cve']['metrics'][key][0]['cvssData']['vectorString']
+                break
+            except:
+                pass
+    return vector_string
+
+def get_nist_cwe(entry):
+    cwe="NA"
+    try:
+        cwe =  entry['cve']['weaknesses'][0]['description'][0]['value']
+    except:
+        pass
+    return cwe
+
+def get_nist_links(entry):
+    links = "Entry has no links attribute"
+    nb_link=len(entry['cve']['references'])
+    try:
+        links = entry['cve']['references'][0]['url']
+    except:
+        pass
+    try:
+        for link_idx in range(1,nb_link):
+            links += "\n" + entry['cve']['references'][link_idx]['url']
+    except:
+        print("Loop link failed")
+        pass
+    return links,nb_link
+
+def get_nist_published_date(entry):
+    return entry['cve']['published']
+
 def print_nist_details(entry,keyword=None):
     if verbose:
-        try:
-            text =  entry['cve']['description']['description_data'][0]['value']
-            if keyword is not None:
-                text=text.replace(keyword,f"{color.Fore.RED}{keyword}{color.Style.RESET_ALL}")
-        except:
-            text = "Nothing found"
+        text =  get_nist_description(entry)
+        if keyword is not None:
+            text=text.replace(keyword,f"{color.Fore.RED}{keyword}{color.Style.RESET_ALL}")
         print(text)
-        cwe="NA"
-        try:
-            cwe =  entry['cve']['problemtype']['problemtype_data'][0]['description'][0]['value']
-        except:
-            pass
+        cwe=get_nist_cwe(entry)
         print(f"{color.Fore.YELLOW}CWE:{color.Style.RESET_ALL} {cwe}")
-        vectorstring="NA"
-        try:
-            vectorstring =  entry['impact']['baseMetricV3']['cvssV3']['vectorString']
-        except:
-            pass
-        print(f"{color.Fore.YELLOW}vectorString:{color.Style.RESET_ALL} {vectorstring}")
-    try:
-        link = entry['cve']['references']['reference_data'][0]['url']
-    except:
-        link = "Entry has no links attribute"
-        print("Link error")
-    print_link(link)
+        vector_string=get_nist_vector_string(entry)
+        print(f"{color.Fore.YELLOW}vectorString:{color.Style.RESET_ALL} {vector_string}")
+    link,nb_link = get_nist_links(entry)
+    print_link(f"{nb_link} link(s): \n{link}")
 
 def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False,product=None,cve_id=None):
     try:
         if (not os.path.exists(url)):
             url=get_nist_json(keydate)
-        NewsFeedObj = JsonContent(url)
+        NewsFeedObj = JsonContent(url,tag='vulnerabilities')
         NewsFeed = NewsFeedObj.content()
         NewsFeed_size = NewsFeedObj.size()
     except AssertionError as error:
@@ -260,19 +322,13 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
     nb_found=0
     for i in range(NewsFeed_size):
         try:
-            entry = NewsFeed['CVE_Items'][i]
-            sev="unknown"
-            try:
-                sev=entry['impact']['baseMetricV3']['cvssV3']['baseSeverity']
-            except:
-                pass
-            description=entry['cve']['description']['description_data'][0]['value']
-            tags=""
-            try:
-                tags=entry['cve']['references']['reference_data'][0]['tags'][0]
-            except:
-                pass
-            if cve_id is not None and (entry['cve']['CVE_data_meta']['ID'] != cve_id):
+            entry = NewsFeed['vulnerabilities'][i]
+            sev=get_nist_severity(entry)
+            description=get_nist_description(entry)
+            tags=get_nist_tags(entry)
+            pub_date=get_nist_published_date(entry)
+            current_id=get_nist_id(entry)
+            if cve_id is not None and (current_id != cve_id):
                     continue
             if severity is not None and sev.lower() != severity.lower():
                     continue
@@ -285,13 +341,13 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
                 if exact_word and (not re.search(r'\b'+keyword+r'\b',description) ) and (not re.search(r'\b'+keyword+r'\b',tags) ):
                     continue
             if keydate is not None:
-                if (type(keydate) is str) and (entry['publishedDate'].lower().find(keydate.lower()) == -1) :
+                if (type(keydate) is str) and (pub_date.lower().find(keydate.lower()) == -1) :
                     continue
                 if (type(keydate) is list):
-                    print(f"list {entry['publishedDate'].split("T")}")
+                    print(f"list {pub_date.split("T")}")
                     cvedate=""
                     try:
-                        cvedate=time.strptime(entry['publishedDate'].split("T")[0], "%Y-%m-%d")
+                        cvedate=time.strptime(pub_date.split("T")[0], "%Y-%m-%d")
                     except:
                         pass
                     try:
@@ -301,8 +357,8 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
                             continue
                     except:
                         pass
-            print(entry['cve']['CVE_data_meta']['ID'])
-            print(entry['publishedDate'])
+            print(current_id)
+            print(pub_date)
             print_severity(sev)
             print_nist_details(entry,keyword)
             if cve_id is not None:
@@ -372,44 +428,131 @@ def get_cve_org_json(date=None, inputfile=None):
         exit(1)
     return data_to_return
 
-def print_cve_org_details(entry,keyword=None,exact_word=False):
-    if verbose:
-        try:
-            text =  entry['cna']['descriptions'][0]['value']
-            if keyword is not None:
-                text=text.replace(keyword,f"{color.Fore.RED}{keyword}{color.Style.RESET_ALL}")
-        except:
-            text = "Nothing found"
-        print(text)
-        try:
-            text =  entry['cna']['affected'][0]['product']
-        except:
-            text = "no related product found"
-        print(f"{color.Fore.YELLOW}Product:{color.Style.RESET_ALL} {text}")
-        cwe="NA"
-        try:
-            cwe =  entry['cna']['problemTypes'][0]['descriptions'][0]['cweId']
-        except:
-            pass
-        print(f"{color.Fore.YELLOW}CWE:{color.Style.RESET_ALL} {cwe}")
-        vectorstring="NA"
-        try:
-            vectorstring =  entry['cna']['metrics'][0]['cvssV3_1']['vectorString']
-        except:
-            pass
-        print(f"{color.Fore.YELLOW}vectorString:{color.Style.RESET_ALL} {vectorstring}")
 
-    nb_link=len(entry['cna']['references'])
+def get_cve_published_date(entry):
+    if 'cveMetadata' not in entry.keys():
+        return ""
+    else:
+        return entry['cveMetadata']['datePublished']
+
+def get_cve_description(entry):
+    loc_entry=entry
+    if 'containers' in entry.keys():
+        loc_entry=entry['containers']
+    text =""
     try:
-        link = entry['cna']['references'][0]['url']
+        text =  loc_entry['cna']['descriptions'][0]['value']
     except:
-        link = "Entry has no links attribute"
+        pass
+    return text
+
+def get_cve_severity(entry):
+    sev="unknown"
+    loc_entry=entry
+    if 'containers' in entry.keys():
+        loc_entry=entry['containers']
+    try:
+        sev=loc_entry['cna']['metrics'][0]['cvssV3_1']['baseSeverity']
+    except:
+        pass
+    return sev
+
+def get_cve_tags(entry):
+    tags=""
+    loc_entry=entry
+    if 'containers' in entry.keys():
+        loc_entry=entry['containers']
+    try:
+        tags=loc_entry['cve']['references']['reference_data'][0]['tags'][0]
+    except:
+        pass
+    return tags
+
+def get_cve_affected_product(entry):
+    affected_product=""
+    loc_entry=entry
+    if 'containers' in entry.keys():
+        loc_entry=entry['containers']
+    try:
+        affected_product=loc_entry['cna']['affected'][0]['product']
+    except:
+        pass
+    return affected_product
+
+def get_cve_vector_string(entry):
+    vector_string=""
+    loc_entry=entry
+    if 'containers' in entry.keys():
+        loc_entry=entry['containers']
+    try:
+        vector_string =  loc_entry['cna']['metrics'][0]['cvssV3_1']['vectorString']
+    except:
+        pass
+    return vector_string
+
+def get_cve_cwe(entry):
+    cwe="NA"
+    loc_entry=entry
+    if 'containers' in entry.keys():
+        loc_entry=entry['containers']
+    try:
+        cwe =  loc_entry['cna']['problemTypes'][0]['descriptions'][0]['cweId']
+    except:
+        pass
+    return cwe
+
+def get_cve_id(entry):
+    cve_id=""
+    if 'cveMetadata' not in entry.keys():
+        return ""
+    try:
+       cve_id=entry['cveMetadata']['cveId']
+    except:
+        pass
+    return cve_id
+
+def get_cve_links(entry):
+    loc_entry=entry
+    if 'containers' in entry.keys():
+        loc_entry=entry['containers']
+    links = "Entry has no links attribute"
+    nb_link=len(loc_entry['cna']['references'])
+    try:
+        links = loc_entry['cna']['references'][0]['url']
+    except:
+        pass
     try:
         for link_idx in range(1,nb_link):
-            link += "\n" + entry['cna']['references'][link_idx]['url']
+            links += "\n" + loc_entry['cna']['references'][link_idx]['url']
     except:
         print("Loop link failed")
         pass
+    return links,nb_link
+
+def get_cve_first_link(entry):
+    loc_entry=entry
+    if 'containers' in entry.keys():
+        loc_entry=entry['containers']
+    link = "Entry has no links attribute"
+    try:
+        link = loc_entry['cna']['references'][0]['url']
+    except:
+        pass
+    return link
+
+def print_cve_org_details(entry,keyword=None,exact_word=False):
+    if verbose:
+        text =  get_cve_description(entry)
+        if keyword is not None:
+            text=text.replace(keyword,f"{color.Fore.RED}{keyword}{color.Style.RESET_ALL}")
+        print(text)
+        product=get_cve_affected_product(entry)
+        print(f"{color.Fore.YELLOW}Product:{color.Style.RESET_ALL} {product}")
+        cwe=get_cve_cwe(entry)
+        print(f"{color.Fore.YELLOW}CWE:{color.Style.RESET_ALL} {cwe}")
+        vector_string=get_cve_vector_string(entry)
+        print(f"{color.Fore.YELLOW}vectorString:{color.Style.RESET_ALL} {vector_string}")
+    link,nb_link=get_cve_links(entry)
     print_link(f"{nb_link} link(s): \n{link}")
 
 def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet_on_error=False,ignore_word=None,exact_word=False,product=None,cve_id=None):
@@ -432,34 +575,20 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,qu
         try:
             NewsFeedObj = JsonContent(filesource=data_content[i],tag='containers')
             NewsFeed = NewsFeedObj.content()
-            NewsFeed_size = NewsFeedObj.size()
+            #NewsFeed_size = NewsFeedObj.size()
+            current_id=get_cve_id(NewsFeed)
+            pub_date=get_cve_published_date(NewsFeed)
             entry = NewsFeed['containers']
-            sev="unknown"
-            try:
-                sev=entry['cna']['metrics'][0]['cvssV3_1']['baseSeverity']
-            except:
-                pass
-            description=""
-            try:
-                description=entry['cna']['descriptions'][0]['value']
-            except:
-                pass
-            tags=""
-            try:
-                tags=entry['cve']['references']['reference_data'][0]['tags'][0]
-            except:
-                pass
-            affected_product=""
-            try:
-                affected_product=entry['cna']['affected'][0]['product']
-            except:
-                pass
-            if cve_id is not None and (NewsFeed['cveMetadata']['cveId'] != cve_id):
+            sev=get_cve_severity(entry)
+            description=get_cve_description(entry)
+            tags=get_cve_tags(entry)
+            affected_product=get_cve_affected_product(entry)
+            if cve_id is not None and ( current_id != cve_id):
                     continue
             if severity is not None and sev.lower() != severity.lower():
                     continue
             if ignore_word is not None:
-                if (description.lower().find(ignore_word.lower()) != -1) or ( entry['cna']['references'][0]['url'].lower().find(ignore_word.lower()) != -1 ):
+                if (description.lower().find(ignore_word.lower()) != -1) or (get_cve_first_link(entry).lower().find(ignore_word.lower()) != -1 ):
                     continue
             if keyword is not None:
                 if (description.lower().find(keyword.lower()) == -1) and (tags.lower().find(keyword.lower()) == -1):
@@ -470,20 +599,20 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,qu
                 if (affected_product.lower().find(product.lower()) == -1) :
                     continue
             if keydate is not None:
-                if (type(keydate) is str) and (NewsFeed['cveMetadata']['datePublished'].lower().find(keydate.lower()) == -1) :
+                if (type(keydate) is str) and (pub_date.lower().find(keydate.lower()) == -1) :
                     continue
                 if (type(keydate) is list):
                     try:
                         dateref0=time.strptime(keydate[0], "%Y-%m-%d")
                         dateref1=time.strptime(keydate[1], "%Y-%m-%d")
-                        cvedate=time.strptime(NewsFeed['cveMetadata']['datePublished'].split("T")[0],"%Y-%m-%d")
+                        cvedate=time.strptime(pub_date.split("T")[0],"%Y-%m-%d")
                         if cvedate<dateref0 or cvedate>dateref1:
                             continue
                     except:
                         pass
                         #print("date not found")
-            print(NewsFeed['cveMetadata']['cveId'])
-            print(NewsFeed['cveMetadata']['datePublished'])
+            print(current_id)
+            print(pub_date)
             print_severity(sev)
             print_cve_org_details(entry,keyword,exact_word)
             if cve_id is not None:
@@ -597,7 +726,7 @@ if __name__ == '__main__':
         dump_json=True
     if args.cve_id is not None and args.pubdate is None:
         args.pubdate=args.cve_id.split("-")[1]
-        if args.nist and (args.cve_id.split("-")[1] == datetime.now().year):
+        if args.nist and (args.cve_id.split("-")[1] == str(datetime.now().year)):
             args.pubdate=None
     if args.pubdaterange is not None:
         daterange=args.pubdaterange.split("--")
