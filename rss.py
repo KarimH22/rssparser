@@ -199,7 +199,7 @@ def get_nist_json(date=None):
             b=date[1].split('-')[0]
             cveperiod=sorted([int(a),int(b)])
         loop_range=range(cveperiod[0],cveperiod[1]+1)
-    data_to_return=b''
+    compiled_data={'vulnerabilities':[]}
     for i in loop_range:
         url=nist_url+"/cve/"+NIST_JSON_VERSION+"/nvdcve-"+NIST_JSON_VERSION+"-"+str(i)+".json.zip"
         try:
@@ -207,12 +207,14 @@ def get_nist_json(date=None):
             local=tmpfile.NamedTemporaryFile('wb')
             local.write(response.content)
             data=zipfile.ZipFile(str(local.name))
-            data_to_return=data.read("nvdcve-"+NIST_JSON_VERSION+"-"+str(i)+".json") + data_to_return
+            json_data=json.loads(data.read("nvdcve-"+NIST_JSON_VERSION+"-"+str(i)+".json"))
+            compiled_data['vulnerabilities']+= json_data['vulnerabilities']
             data.close()
             local.close()
         except Exception as e:
             print(f"Try to get {url} but failed, error {str(e)}")
             exit(1)
+    data_to_return= json.dumps(compiled_data).encode('utf-8')
     return data_to_return
 
 def get_nist_id(entry):
@@ -346,15 +348,10 @@ def print_nist_entry(url, nb_entry,keyword=None,keydate=None,severity=None,quiet
                 if (type(keydate) is str) and (pub_date.lower().find(keydate.lower()) == -1) :
                     continue
                 if (type(keydate) is list):
-                    print(f"list {pub_date.split("T")}")
-                    cvedate=""
-                    try:
-                        cvedate=time.strptime(pub_date.split("T")[0], "%Y-%m-%d")
-                    except:
-                        pass
                     try:
                         dateref0=time.strptime(keydate[0], "%Y-%m-%d")
                         dateref1=time.strptime(keydate[1], "%Y-%m-%d")
+                        cvedate=time.strptime(pub_date.split("T")[0], "%Y-%m-%d")
                         if cvedate<dateref0 or cvedate>dateref1:
                             continue
                     except:
@@ -611,7 +608,6 @@ def print_cve_org_entry(url, nb_entry,keyword=None,keydate=None,severity=None,qu
                             continue
                     except:
                         pass
-                        #print("date not found")
             print(current_id)
             print(pub_date)
             print_severity(sev)
@@ -732,10 +728,11 @@ if __name__ == '__main__':
     if args.pubdaterange is not None:
         daterange=args.pubdaterange.split("--")
         if len(daterange)>=2:
+            daterange=sorted(daterange)
             if len(daterange[0].split("-"))<=1:
                 daterange[0]=daterange[0]+"-01-01"
             if len(daterange[1].split("-"))<=1:
-                daterange[1]=daterange[1]+"-01-01"
+                daterange[1]=daterange[1]+"-12-31"
             args.pubdate=[daterange[0],daterange[1]]
     
     cve_format_funs[source]['fun'](source_link,args.entryval,args.kw,args.pubdate,severity=args.severity,quiet_on_error=args.quiet,
