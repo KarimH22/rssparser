@@ -40,8 +40,8 @@ def type_file(filename):
     else:
         raise argparse.ArgumentTypeError("Should be an existing file")
     
-def type_cve(cweid):
-    pattern= r'^CWE-(\d{4})$'
+def type_cwe(cweid):
+    pattern= r'^CWE-(\d{1,4})$'
     if bool(re.match(pattern,cweid)):
         return cweid
     else:
@@ -351,7 +351,10 @@ def print_nist_entry(url, cve_parameters):
             tags=get_nist_tags(entry)
             pub_date=get_nist_published_date(entry)
             current_id=get_nist_id(entry)
+            cwe_id=get_nist_cwe(entry)
             if cve_parameters.cve_id is not None and (current_id != cve_parameters.cve_id):
+                    continue
+            if cve_parameters.cwe_id is not None and ( cwe_id != cve_parameters.cwe_id):
                     continue
             if cve_parameters.severity is not None and sev.lower() != cve_parameters.severity.lower():
                     continue
@@ -601,7 +604,10 @@ def print_cve_org_entry(url, cve_parameters):
             description=get_cve_description(entry)
             tags=get_cve_tags(entry)
             affected_product=get_cve_affected_product(entry)
+            cwe_id=get_cve_cwe(entry)
             if cve_parameters.cve_id is not None and ( current_id != cve_parameters.cve_id):
+                    continue
+            if cve_parameters.cwe_id is not None and ( cwe_id != cve_parameters.cwe_id):
                     continue
             if cve_parameters.severity is not None and sev.lower() != cve_parameters.severity.lower():
                     continue
@@ -716,6 +722,7 @@ if __name__ == '__main__':
     parser.add_argument('--exact-key',action='store_true', required=False,help="exact key")
     parser.add_argument('-i','--id',dest='cve_id', help=" exact cve id",  type=type_cve, default=None )
     parser.add_argument('--dump',action='store_true', required=False,help="Dump json all cve id")
+    parser.add_argument('--cwe-id',dest='cwe_id', help=" exact cwe id",  type=type_cwe, default=None )
     args = parser.parse_args()
 
     if args.get_cve_org_data:
@@ -761,5 +768,6 @@ if __name__ == '__main__':
     my_cve_parameters.exact_word=args.exact_key
     my_cve_parameters.product=args.product
     my_cve_parameters.cve_id=args.cve_id
+    my_cve_parameters.cwe_id=args.cwe_id
 
     cve_format_funs[source]['fun'](source_link,my_cve_parameters)
